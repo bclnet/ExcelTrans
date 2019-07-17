@@ -1,0 +1,31 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio 15
+VisualStudioVersion = 15.0.28307.168
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "ExcelTrans", "ExcelTrans\ExcelTrans.csproj", "{4E1B7551-14FA-439D-89B8-8E5114568A94}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "ExcelTrans.Tests", "ExcelTrans.Tests\ExcelTrans.Tests.csproj", "{587DC82F-B7FA-4B47-A8E0-915954EEC7A0}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{4E1B7551-14FA-439D-89B8-8E5114568A94}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{4E1B7551-14FA-439D-89B8-8E5114568A94}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{4E1B7551-14FA-439D-89B8-8E5114568A94}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{4E1B7551-14FA-439D-89B8-8E5114568A94}.Release|Any CPU.Build.0 = Release|Any CPU
+		{587DC82F-B7FA-4B47-A8E0-915954EEC7A0}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{587DC82F-B7FA-4B47-A8E0-915954EEC7A0}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{587DC82F-B7FA-4B47-A8E0-915954EEC7A0}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{587DC82F-B7FA-4B47-A8E0-915954EEC7A0}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {4EA3A381-02DB-48F8-9EE1-87FA72BF1FB1}
+	EndGlobalSection
+EndGlobal
