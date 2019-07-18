@@ -2,6 +2,12 @@
 
   <PropertyGroup>
     <TargetFramework>netstandard2.0</TargetFramework>
+    <Description>Transforms Csv to Excel spreadsheets using .NET and EPPlus
+</Description>
+    <Company>Contoso</Company>
+    <Authors>Contoso</Authors>
+    <PackageLicenseUrl>http://www.opensource.org/licenses/mit-license.php</PackageLicenseUrl>
+    <PackageProjectUrl>https://github.com/bclnet/ExcelTrans</PackageProjectUrl>
   </PropertyGroup>
 
   <ItemGroup>

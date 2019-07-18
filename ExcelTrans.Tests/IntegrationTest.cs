@@ -7,7 +7,7 @@ using System.IO;
 
 namespace ExcelTrans
 {
-    public class WriteTest
+    public class IntegrationTest
     {
         static Tuple<Stream, string, string> MakeInvoiceFile(IEnumerable<TestData> myData)
         {
@@ -51,7 +51,7 @@ namespace ExcelTrans
         [Test]
         public void Should_run()
         {
-            var path = @"C:\T_";
+            var path = @"Out";
             var myData = new[] {
                 new TestData { One = "value1", Two = "value2" },
                 new TestData { One = "value1", Two = "value2" },

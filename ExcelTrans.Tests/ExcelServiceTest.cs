@@ -33,7 +33,7 @@ namespace ExcelTrans
             // then
             Check.That(doc).IsEqualTo(
 @"^q|   CellsStyle[A1]: f1
-^q=AQAAAAJBMQEAAmYx");
+^q=AQAAAAJBMQEAAmYx".ToLocalString());
         }
 
         [Test]
