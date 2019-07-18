@@ -362,7 +362,6 @@ namespace ExcelTrans
 
         #region Cells
 
-        // https://stackoverflow.com/questions/40209636/epplus-number-format/40214134
         public static void CellsStyle(this IExcelContext ctx, int row, int col, params string[] styles) => CellsStyle(ctx, ExcelService.GetAddress(row, col), styles);
         public static void CellsStyle(this IExcelContext ctx, int fromRow, int fromCol, int toRow, int toCol, params string[] styles) => CellsStyle(ctx, ExcelService.GetAddress(fromRow, fromCol, toRow, toCol), styles);
         public static void CellsStyle(this IExcelContext ctx, Address r, params string[] styles) => CellsStyle(ctx, ExcelService.GetAddress(r, 0, 0), styles);
@@ -376,7 +375,6 @@ namespace ExcelTrans
                 // number-format
                 if (style.StartsWith("n"))
                 {
-                    // https://support.office.com/en-us/article/number-format-codes-5026bbd6-04bc-48cd-bf33-80f18b4eae68
                     if (style.StartsWith("n:")) range.Style.Numberformat.Format = style.Substring(2);
                     else if (style.StartsWith("n$")) range.Style.Numberformat.Format = $"_(\"$\"* #,##{NumberformatPrec(style.Substring(2), "0.00")}_);_(\"$\"* \\(#,##{NumberformatPrec(style.Substring(2), "0.00")}\\);_(\"$\"* \" - \"??_);_(@_)"; // "_-$* #,##{NumberformatPrec(style.Substring(2), "0.00")}_-;-$* #,##{NumberformatPrec(style.Substring(2), "0.00")}_-;_-$* \"-\"??_-;_-@_-";
                     else if (style.StartsWith("n%")) range.Style.Numberformat.Format = $"{NumberformatPrec(style.Substring(2), "0")}%";
