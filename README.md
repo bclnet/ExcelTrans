@@ -148,8 +148,8 @@ w   | false             | Wrap the text
 ## CellValueKind
 *Values for the CellValue command*
 
-Enum            | Description
----             | ---
+Enum | Description
+--- | ---
 Value           | Set the range to a specific value
 Text            | Returns the formatted value.
 AutoFilter      | Set an autofilter for the range
@@ -170,8 +170,8 @@ StyleName       | The named style
 ## ColumnValueKind
 *Values for the ColumnValue command*
 
-Enum            | Description
----             | ---
+Enum | Description
+--- | ---
 AutoFit         | Set the column width from the content of the range. The minimum width is the value of the ExcelWorksheet.defaultColumnWidth property. Note: Cells containing formulas are ignored since EPPlus don't have a calculation engine. Wrapped and merged cells are also ignored.
 BestFit         | If set to true a column automaticlly resize(grow wider) when a user inputs numbers in a cell.
 Merged          | none
@@ -182,8 +182,8 @@ TrueWidth^      | Set width to a scaled-value that should result in the nearest 
 ## ConditionalFormattingKind
 *Values for the ConditionalFormatting command*
 
-Enum            | Description
----             | ---
+Enum | Description
+--- | ---
 AboveAverage    | Add AboveAverage Rule
 AboveOrEqualAverage | Add AboveOrEqualAverage Rule
 AboveStdDev     | Add AboveStdDev Rule
@@ -234,8 +234,8 @@ Yesterday       | Add Yesterday Rule
 ## RowValueKind
 *Values for the RowValue command*
 
-Enum            | Description
----             | ---
+Enum | Description
+--- | ---
 Value           | Set the range to a specific value
 Text            | Returns the formatted value.
 AutoFilter      | Set an autofilter for the range
@@ -256,11 +256,11 @@ StyleName       | The named style
 ## ViewActionKind
 *Values for the ViewAction command*
 
-Enum            | Description
----             | ---
+Enum | Description
+--- | ---
 FreezePane      | Freeze the columns/rows to left and above the cell
 SetTabSelected  | Sets whether the worksheet is selected within the workbook.
-UnfreezePane    |  Unlock all rows and columns to scroll freely
+UnfreezePane    | Unlock all rows and columns to scroll freely
 
 
 # Author
