@@ -17,49 +17,64 @@ This repository holds the implementation of ExcelTrans in C#.
 ## Simple Example
 
 ```csharp
-    static Tuple<Stream, string, string> MakeInvoiceFile(IEnumerable<MyData> myData)
+static Tuple<Stream, string, string> MakeInvoiceFile(IEnumerable<MyData> myData)
+{
+    var transform = ExcelService.Encode(new List<IExcelCommand>
     {
-        var transform = ExcelService.Encode(new List<IExcelCommand>
-        {
-            new WorksheetsAdd("Invoice"),
-            new CellsStyle(Address.Range, 0, 1, 2, 1, "lc:Yellow"),
-        });
-        
-        var s = new MemoryStream();
-        var w = new StreamWriter(s);
-        // add transform to output
-        w.WriteLine(transform);
-        // add csv file to output
-        CsvWriter.Write(w, myData);
-        w.Flush(); s.Position = 0;
-        var result = new Tuple<Stream, string, string>(s, "text/csv", "invoice.csv");
-        // optionally transform
-        result = ExcelService.Transform(result);
-        return result;
-    }
+        new WorksheetsAdd("Invoice"),
+        new CellsStyle(Address.Range, 0, 1, 2, 1, "lc:Yellow"),
+    });
+    
+    var s = new MemoryStream();
+    var w = new StreamWriter(s);
+    // add transform to output
+    w.WriteLine(transform);
+    // add csv file to output
+    CsvWriter.Write(w, myData);
+    w.Flush(); s.Position = 0;
+    var result = new Tuple<Stream, string, string>(s, "text/csv", "invoice.csv");
+    // optionally transform
+    result = ExcelService.Transform(result);
+    return result;
+}
 
-    static void TransferFile(string path, Stream stream, string file)
+static void TransferFile(string path, Stream stream, string file)
+{
+    path = Path.Combine(path, file);
+    if (!Directory.Exists(Path.GetDirectoryName(path)))
+        Directory.CreateDirectory(Path.GetDirectoryName(path));
+    using (var fileStream = File.Create(path))
     {
-        path = Path.Combine(path, file);
-        if (!Directory.Exists(Path.GetDirectoryName(path)))
-            Directory.CreateDirectory(Path.GetDirectoryName(path));
-        using (var fileStream = File.Create(path))
-        {
-            stream.CopyTo(fileStream);
-            stream.Seek(0, SeekOrigin.Begin);
-        }
+        stream.CopyTo(fileStream);
+        stream.Seek(0, SeekOrigin.Begin);
     }
+}
 
-    var path = ...some path...;
-    var myData = ...some data...;
-    var file = MakeInvoiceFile(myData);
-    TransferFile(path, file.Item1, file.Item3);
+var path = ...some path...;
+var myData = ...some data...;
+var file = MakeInvoiceFile(myData);
+TransferFile(path, file.Item1, file.Item3);
 ```
 
 
 # Reference
 
+## Address
+*Values for the Address fields*
+
+Enum    | Example   | Description
+---     | ---:      | ---
+Cell    | A1        | Cell relative address
+CellAbs | A1        | Cell absolute address
+Range   | A1:B1     | Range relative address
+RangeAbs| A1:B1     | Range absoulute address
+RowOrCol| A or 1    | Row or Column address
+ColToCol| A:B       | Column to Column address
+RowToRow| 1:2       | Row to Row addess
+
+
 ## Commands
+*List of available commands*
 
 Command     | Description | See Also
 ---         | --- | ---:
@@ -85,7 +100,7 @@ WorksheetsOpen  | Opens a Worksheet with `.Name` from the current Workbook
 
 
 ## Styles
-Values for the CellsStyle Command
+*Values for the CellsStyle command*
 
 `n*`| The numberformat  | Description
 --- | ---:              | ---
@@ -145,7 +160,8 @@ w   | false             | Wrap the text
 
 
 ## CellValueKind
-*Values for the CellValue Command*
+*Values for the CellValue command*
+
 Enum            | Description
 ---             | ---
 Value           | Set the range to a specific value
@@ -166,18 +182,20 @@ StyleName       | The named style
 
 
 ## ColumnValueKind
-*Values for the ColumnValue Command*
+*Values for the ColumnValue command*
+
 Enum            | Description
 ---             | ---
 AutoFit         | Set the column width from the content of the range. The minimum width is the value of the ExcelWorksheet.defaultColumnWidth property. Note: Cells containing formulas are ignored since EPPlus don't have a calculation engine. Wrapped and merged cells are also ignored.
 BestFit         | If set to true a column automaticlly resize(grow wider) when a user inputs numbers in a cell.
 Merged          | none
 Width           | Sets the width of the column in the worksheet
-TrueWidth^      | Set width to a scaled-value that should result in the nearest possible value to the true desired setting.
+TrueWidth       | Set width to a scaled-value that should result in the nearest possible value to the true desired setting.
 
 
 ## ConditionalFormattingKind
-*Values for the ConditionalFormatting Command*
+*Values for the ConditionalFormatting command*
+
 Enum            | Description
 ---             | ---
 AboveAverage    | Add AboveAverage Rule
@@ -228,7 +246,8 @@ Yesterday       | Add Yesterday Rule
 
 
 ## RowValueKind
-*Values for the RowValue Command*
+*Values for the RowValue command*
+
 Enum            | Description
 ---             | ---
 Value           | Set the range to a specific value
@@ -249,12 +268,13 @@ StyleName       | The named style
 
 
 ## ViewActionKind
-*Values for the ViewAction Command*
+*Values for the ViewAction command*
+
 Enum            | Description
 ---             | ---
 FreezePane      | Freeze the columns/rows to left and above the cell
 SetTabSelected  | Sets whether the worksheet is selected within the workbook.
-UnfreezePane    |  Unlock all rows and columns to scroll freely
+UnfreezePane    | Unlock all rows and columns to scroll freely
 
 
 # Author

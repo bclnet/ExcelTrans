@@ -34,7 +34,7 @@ namespace ExcelTrans.Services
             Check.That(doc).IsEqualTo(
 @"""One"",""Two""
 ""value1"",""value2""
-");
+".ToLocalString());
         }
 
         [Test]
@@ -49,7 +49,7 @@ namespace ExcelTrans.Services
             Check.That(doc).IsEqualTo(
 @"""One""|""Two""
 ""value1""|""value2""
-");
+".ToLocalString());
         }
 
 
@@ -64,7 +64,7 @@ namespace ExcelTrans.Services
             // then
             Check.That(doc).IsEqualTo(
 @"""value1"",""value2""
-");
+".ToLocalString());
         }
     }
 }
