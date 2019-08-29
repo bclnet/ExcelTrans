@@ -35,7 +35,8 @@ namespace ExcelTrans
             var afterActions = new List<Action>();
             Action action2 = null;
             foreach (var cmd in cmds)
-                if (cmd.When <= When.Before) { cmd.Execute(ctx, ref action2); if (action2 != null) { afterActions.Add(action2); action2 = null; } }
+                if (cmd == null) { }
+                else if (cmd.When <= When.Before) { cmd.Execute(ctx, ref action2); if (action2 != null) { afterActions.Add(action2); action2 = null; } }
                 else afterActions.Add(() => { cmd.Execute(ctx, ref action2); if (action2 != null) { afterActions.Add(action2); action2 = null; } });
             after = afterActions.Count > 0 ? () => { foreach (var action in afterActions) action?.Invoke(); } : (Action)null;
             return frame;
@@ -47,6 +48,7 @@ namespace ExcelTrans
             var afterActions = new List<Action>();
             foreach (var cmd in ctx.CmdRows.Where(x => (x.When & when) == when))
             {
+                if (cmd == null) continue;
                 var r = cmd.Func(ctx, s);
                 if ((r & CommandRtn.Execute) == CommandRtn.Execute)
                 {
@@ -65,6 +67,7 @@ namespace ExcelTrans
             var afterActions = new List<Action>();
             foreach (var cmd in ctx.CmdCols)
             {
+                if (cmd == null) continue;
                 var r = cmd.Func(ctx, s, v);
                 if ((r & CommandRtn.Execute) == CommandRtn.Execute)
                 {

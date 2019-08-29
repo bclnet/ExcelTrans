@@ -46,9 +46,7 @@ namespace ExcelTrans.Utils
         {
             using (var b = new MemoryStream(Convert.FromBase64String(packed)))
             using (var r = new BinaryReader(b))
-            {
                 return DecodeCommands(r);
-            }
         }
 
         public static void EncodeAction(BinaryWriter w, object action) { w.Write((ushort)funcs.Count); funcs.Add(action); }
@@ -77,6 +75,7 @@ namespace ExcelTrans.Utils
             w.Write((ushort)cmds.Length);
             foreach (var cmd in cmds)
             {
+                if (cmd == null) continue;
                 var cmdType = cmd.GetType();
                 var cmdId = ExcelSerDes.cmds.IndexOf(cmdType.GenericTypeArguments.Length == 0 ? cmdType : cmdType.GetGenericTypeDefinition());
                 if (cmdId == -1) throw new InvalidOperationException($"{cmd} does not exist");
