@@ -16,7 +16,31 @@ namespace ExcelTrans.Services
     /// </summary>
     public static class ExcelReader
     {
+        /// <summary>
+        /// Reads an Excel.xlsx file.
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="filePath">The file path.</param>
+        /// <param name="action">The action.</param>
+        /// <param name="width">The width.</param>
+        /// <param name="startRow">The start row.</param>
+        /// <param name="worksheetName">Name of the worksheet.</param>
+        /// <param name="worksheetPosition">The worksheet position.</param>
+        /// <returns>IEnumerable&lt;T&gt;.</returns>
+        /// <exception cref="System.ArgumentNullException">filePath</exception>
         public static IEnumerable<T> ReadOpenXml<T>(string filePath, Func<Collection<string>, T> action, int width = -1, int startRow = 0, string worksheetName = null, int worksheetPosition = 0) => ReadOpenXml(null, new FileInfo(filePath ?? throw new ArgumentNullException(nameof(filePath))), action, width, startRow, worksheetName = null, worksheetPosition = 0);
+        /// <summary>
+        /// Reads an Excel.xlsx file.
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="stream">The stream.</param>
+        /// <param name="action">The action.</param>
+        /// <param name="width">The width.</param>
+        /// <param name="startRow">The start row.</param>
+        /// <param name="worksheetName">Name of the worksheet.</param>
+        /// <param name="worksheetPosition">The worksheet position.</param>
+        /// <returns>IEnumerable&lt;T&gt;.</returns>
+        /// <exception cref="System.ArgumentNullException">stream</exception>
         public static IEnumerable<T> ReadOpenXml<T>(Stream stream, Func<Collection<string>, T> action, int width = -1, int startRow = 0, string worksheetName = null, int worksheetPosition = 0) => ReadOpenXml(stream ?? throw new ArgumentNullException(nameof(stream)), null, action, width, startRow, worksheetName = null, worksheetPosition = 0);
         static IEnumerable<T> ReadOpenXml<T>(Stream stream, FileInfo fileInfo, Func<Collection<string>, T> action, int width = -1, int startRow = 0, string worksheetName = null, int worksheetPosition = 0)
         {
@@ -24,10 +48,7 @@ namespace ExcelTrans.Services
             {
                 list.Clear();
                 foreach (var r in row)
-                {
-                    var str = r.Value?.ToString();
-                    list.Add(str.Trim());
-                }
+                    list.Add(r.Value?.ToString().Trim());
                 return list;
             }
             using (var p = fileInfo != null ? new ExcelPackage(fileInfo) : new ExcelPackage(stream ?? throw new ArgumentNullException(nameof(stream))))
@@ -40,24 +61,42 @@ namespace ExcelTrans.Services
                 var list = new Collection<string>();
                 for (var rowIdx = startRow + 1; rowIdx <= dim.Rows; rowIdx++)
                     if ((row = ws.Cells[rowIdx, 1, rowIdx, width]) != null)
-                    {
-                        var entries = ParseIntoEntries(list, row);
-                        yield return action(entries);
-                    }
+                        yield return action(ParseIntoEntries(list, row));
             }
         }
 
+        /// <summary>
+        /// Reads an Excel.xls file.
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="filePath">The file path.</param>
+        /// <param name="action">The action.</param>
+        /// <param name="width">The width.</param>
+        /// <param name="startRow">The start row.</param>
+        /// <param name="worksheetName">Name of the worksheet.</param>
+        /// <param name="worksheetPosition">The worksheet position.</param>
+        /// <returns>IEnumerable&lt;T&gt;.</returns>
+        /// <exception cref="System.ArgumentNullException">filePath</exception>
         public static IEnumerable<T> ReadBinary<T>(string filePath, Func<Collection<string>, T> action, int width, int startRow = 0, string worksheetName = null, int worksheetPosition = 0) => ReadBinary(File.OpenRead(filePath ?? throw new ArgumentNullException(nameof(filePath))), action, width, startRow, worksheetName, worksheetPosition);
+        /// <summary>
+        /// Reads an Excel.xls file.
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="stream">The stream.</param>
+        /// <param name="action">The action.</param>
+        /// <param name="width">The width.</param>
+        /// <param name="startRow">The start row.</param>
+        /// <param name="worksheetName">Name of the worksheet.</param>
+        /// <param name="worksheetPosition">The worksheet position.</param>
+        /// <returns>IEnumerable&lt;T&gt;.</returns>
+        /// <exception cref="System.ArgumentNullException">stream</exception>
         public static IEnumerable<T> ReadBinary<T>(Stream stream, Func<Collection<string>, T> action, int width, int startRow = 0, string worksheetName = null, int worksheetPosition = 0)
         {
             Collection<string> ParseIntoEntries(Collection<string> list, IRow r)
             {
                 list.Clear();
                 for (var i = 0; i < width; i++)
-                {
-                    var str = r.GetCell(i).StringCellValue;
-                    list.Add(str.Trim());
-                }
+                    list.Add(r.GetCell(i).StringCellValue?.Trim());
                 return list;
             }
             try
@@ -69,16 +108,33 @@ namespace ExcelTrans.Services
                     var list = new Collection<string>();
                     for (var rowIdx = startRow; rowIdx <= ws.LastRowNum; rowIdx++)
                         if ((row = ws.GetRow(rowIdx)) != null)
-                        {
-                            var entries = ParseIntoEntries(list, row);
-                            yield return action(entries);
-                        }
+                            yield return action(ParseIntoEntries(list, row));
                 }
             }
             finally { stream.Dispose(); }
         }
 
+        /// <summary>
+        /// Reads an raw xml Excel file.
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="filePath">The file path.</param>
+        /// <param name="action">The action.</param>
+        /// <param name="width">The width.</param>
+        /// <param name="startRow">The start row.</param>
+        /// <returns>IEnumerable&lt;T&gt;.</returns>
+        /// <exception cref="System.ArgumentNullException">filePath</exception>
         public static IEnumerable<T> ReadRawXml<T>(string filePath, Func<Collection<string>, T> action, int width, int startRow = 0) => ReadRawXml(File.OpenRead(filePath ?? throw new ArgumentNullException(nameof(filePath))), action, width, startRow);
+        /// <summary>
+        /// Reads an raw xml Excel file.
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="stream">The stream.</param>
+        /// <param name="action">The action.</param>
+        /// <param name="width">The width.</param>
+        /// <param name="startRow">The start row.</param>
+        /// <returns>IEnumerable&lt;T&gt;.</returns>
+        /// <exception cref="System.ArgumentNullException">stream</exception>
         public static IEnumerable<T> ReadRawXml<T>(Stream stream, Func<Collection<string>, T> action, int width, int startRow = 0)
         {
             Exception ParsingException(Exception e, string xml)
@@ -98,15 +154,7 @@ namespace ExcelTrans.Services
                 var cols = row.Descendants("th").Concat(row.Descendants("td")).ToArray();
                 list.Clear();
                 for (var i = 0; i < width; i++)
-                {
-                    if (i >= cols.Length)
-                    {
-                        list.Add(null);
-                        continue;
-                    }
-                    var col = cols[i];
-                    list.Add(col.Value.Trim());
-                }
+                    list.Add(i < cols.Length ? cols[i].Value?.Trim() : null);
                 return list;
             }
             var xml_ = new StreamReader(stream ?? throw new ArgumentNullException(nameof(stream))).ReadToEnd();
@@ -141,7 +189,27 @@ namespace ExcelTrans.Services
             }
         }
 
+        /// <summary>
+        /// Reads an raw xml Excel file.
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="filePath">The file path.</param>
+        /// <param name="action">The action.</param>
+        /// <param name="width">The width.</param>
+        /// <param name="startRow">The start row.</param>
+        /// <returns>IEnumerable&lt;T&gt;.</returns>
+        /// <exception cref="System.ArgumentNullException">filePath</exception>
         public static IEnumerable<T> ReadRaw2Xml<T>(string filePath, Func<Collection<string>, T> action, int width, int startRow = 0) => ReadRaw2Xml(File.OpenRead(filePath ?? throw new ArgumentNullException(nameof(filePath))), action, width, startRow);
+        /// <summary>
+        /// Reads an raw xml Excel file.
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="stream">The stream.</param>
+        /// <param name="action">The action.</param>
+        /// <param name="width">The width.</param>
+        /// <param name="startRow">The start row.</param>
+        /// <returns>IEnumerable&lt;T&gt;.</returns>
+        /// <exception cref="System.ArgumentNullException">stream</exception>
         public static IEnumerable<T> ReadRaw2Xml<T>(Stream stream, Func<Collection<string>, T> action, int width, int startRow = 0)
         {
             Collection<string> ParseIntoEntries(Collection<string> list, XmlReader row)
