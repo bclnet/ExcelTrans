@@ -1,9 +1,7 @@
 using System;
 using System.Collections.Generic;
-using System.ComponentModel;
 using System.IO;
 using System.Linq;
-using System.Reflection;
 using System.Text;
 using WriteOptions = ExcelTrans.Services.CsvWriterSettings.WriteOptions;
 
@@ -14,13 +12,6 @@ namespace ExcelTrans.Services
     /// </summary>
     public static class CsvWriter
     {
-        class ItemInfo
-        {
-            public string Name;
-            public Func<object, object> GetValue;
-            public Func<DisplayNameAttribute> GetDisplayNameAttribute;
-        }
-
         /// <summary>
         /// Writes the specified context.
         /// </summary>
@@ -30,23 +21,6 @@ namespace ExcelTrans.Services
         /// <param name="settings">The context.</param>
         public static void Write<TItem>(TextWriter w, IEnumerable<TItem> set, CsvWriterSettings settings = null)
         {
-            List<ItemInfo> GetItemProperties(bool includeFields)
-            {
-                var items = typeof(TItem).GetProperties().Select(x => new ItemInfo
-                {
-                    Name = x.Name,
-                    GetValue = x.GetValue,
-                    GetDisplayNameAttribute = () => x.GetCustomAttribute<DisplayNameAttribute>(),
-                }).ToList();
-                if (includeFields)
-                    items.AddRange(typeof(TItem).GetFields().Select(x => new ItemInfo
-                    {
-                        Name = x.Name,
-                        GetValue = x.GetValue,
-                        GetDisplayNameAttribute = () => x.GetCustomAttribute<DisplayNameAttribute>(),
-                    }));
-                return items;
-            }
             if (w == null)
                 throw new ArgumentNullException(nameof(w));
             if (set == null)
@@ -56,19 +30,18 @@ namespace ExcelTrans.Services
             var delimiter = settings.Delimiter[0];
             var hasHeaderRow = (settings.EmitOptions & WriteOptions.HasHeaderRow) != 0;
             var encodeValues = (settings.EmitOptions & WriteOptions.EncodeValues) != 0;
-            var itemProperties = GetItemProperties(hasHeaderRow);
+            var columns = settings.GetColumns != null ? settings.GetColumns(typeof(TItem)) : CsvWriterSettings.GetColumnsByType(typeof(TItem), hasHeaderRow);
 
             // header
             var fields = settings.Fields.Count > 0 ? settings.Fields : null;
             var b = new StringBuilder();
             if (hasHeaderRow)
             {
-                foreach (var itemProperty in itemProperties)
+                foreach (var column in columns)
                 {
                     // label
-                    var displayName = itemProperty.GetDisplayNameAttribute();
-                    var name = displayName == null ? itemProperty.Name : displayName.DisplayName;
-                    if (fields != null && fields.TryGetValue(itemProperty.Name, out var field) && field != null)
+                    var name = column.DisplayName ?? column.Name;
+                    if (fields != null && fields.TryGetValue(column.Name, out var field) && field != null)
                         if (field.Ignore) continue;
                         else if (field.DisplayName != null) name = field.DisplayName;
                     b.Append(Encode(encodeValues ? EncodeValue(name) : name) + delimiter);
@@ -89,12 +62,12 @@ namespace ExcelTrans.Services
                     foreach (var item in newGroup)
                     {
                         b.Length = 0;
-                        foreach (var itemProperty in itemProperties)
+                        foreach (var column in columns)
                         {
                             // value
                             string value;
-                            var itemValue = itemProperty.GetValue(item);
-                            if (fields != null && fields.TryGetValue(itemProperty.Name, out var field) && field != null)
+                            var itemValue = column.GetValue(item);
+                            if (fields != null && fields.TryGetValue(column.Name, out var field) && field != null)
                             {
                                 if (field.Ignore) continue;
                                 value = field.CustomFieldFormatter == null ? itemValue?.ToString() ?? string.Empty : field.CustomFieldFormatter(field, item, itemValue);

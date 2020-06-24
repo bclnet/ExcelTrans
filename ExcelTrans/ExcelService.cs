@@ -38,13 +38,13 @@ namespace ExcelTrans
         public static string Encode(IEnumerable<IExcelCommand> cmds) => Encode(cmds.ToArray());
         public static IExcelCommand[] Decode(string packed) => ExcelSerDes.Decode(packed.Substring(Stream.Length));
 
-        public static Tuple<Stream, string, string> Transform(Tuple<Stream, string, string> a)
+        public static (Stream stream, string, string path) Transform((Stream stream, string, string path) value)
         {
-            using (var s1 = a.Item1)
+            using (var s1 = value.stream)
             {
                 s1.Seek(0, SeekOrigin.Begin);
                 var s2 = new MemoryStream(Build(s1));
-                return new Tuple<Stream, string, string>(s2, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", a.Item3.Replace(".csv", ".xlsx"));
+                return (s2, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", value.path.Replace(".csv", ".xlsx"));
             }
         }
 

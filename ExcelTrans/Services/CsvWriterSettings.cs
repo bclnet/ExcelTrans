@@ -1,7 +1,10 @@
 using System;
+using System.Linq;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Globalization;
+using System.ComponentModel;
+using System.Reflection;
 
 namespace ExcelTrans.Services
 {
@@ -105,17 +108,6 @@ namespace ExcelTrans.Services
         public static readonly CsvWriterSettings DefaultSettings = new CsvWriterSettings { };
 
         /// <summary>
-        /// Initializes a new instance of the <see cref="CsvWriterSettings"/> class.
-        /// </summary>
-        public CsvWriterSettings()
-        {
-            EmitOptions = WriteOptions.IncludeFields | WriteOptions.HasHeaderRow | WriteOptions.EncodeValues;
-            FilterMode = WriteFilterMode.ExceptionsInFields;
-            Fields = new FieldCollection();
-            FlushAt = 500;
-        }
-
-        /// <summary>
         /// Gets or sets the <see cref="System.Boolean"/> with the specified option.
         /// </summary>
         public bool this[WriteOptions option]
@@ -142,25 +134,51 @@ namespace ExcelTrans.Services
         /// <value>
         /// The filter mode.
         /// </value>
-        public WriteFilterMode FilterMode { get; set; }
+        public WriteFilterMode FilterMode { get; set; } = WriteFilterMode.ExceptionsInFields;
+
         /// <summary>
         /// Gets the fields.
         /// </summary>
-        public FieldCollection Fields { get; private set; }
+        public FieldCollection Fields { get; } = new FieldCollection();
+
+        /// <summary>
+        /// Gets the columns.
+        /// </summary>
+        public Func<Type, IEnumerable<CsvWriterColumn>> GetColumns { get; set; }
+
+        /// <summary>
+        /// Gets the type of the item infos by.
+        /// </summary>
+        /// <param name="type">The type.</param>
+        /// <param name="includeFields">if set to <c>true</c> [include fields].</param>
+        /// <returns></returns>
+        public static List<CsvWriterColumn> GetColumnsByType(Type type, bool includeFields = false)
+        {
+            var items = type.GetProperties()
+                .Select(x => new CsvWriterColumn(x.Name, x.GetValue, x.GetCustomAttribute<DisplayNameAttribute>()?.DisplayName))
+                .ToList();
+            if (includeFields)
+                items.AddRange(type.GetFields()
+                    .Select(x => new CsvWriterColumn(x.Name, x.GetValue, x.GetCustomAttribute<DisplayNameAttribute>()?.DisplayName)));
+            return items;
+        }
+
         /// <summary>
         /// Gets or sets the emit options.
         /// </summary>
         /// <value>
         /// The emit options.
         /// </value>
-        public WriteOptions EmitOptions { get; set; }
+        public WriteOptions EmitOptions { get; set; } = WriteOptions.IncludeFields | WriteOptions.HasHeaderRow | WriteOptions.EncodeValues;
+
         /// <summary>
         /// Gets or sets the flush at.
         /// </summary>
         /// <value>
         /// The flush at.
         /// </value>
-        public int FlushAt { get; set; }
+        public int FlushAt { get; set; } = 500;
+
         /// <summary>
         /// Gets or sets the on flush.
         /// </summary>

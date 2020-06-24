@@ -67,13 +67,13 @@ namespace ExcelTrans
 
         public object Frame
         {
-            get => new Tuple<int, int, int>(CmdRows.Count, CmdCols.Count, Sets.Count);
+            get => (CmdRows.Count, CmdCols.Count, Sets.Count);
             set
             {
-                var v = (Tuple<int, int, int>)value;
-                CommandRow.Flush(this, v.Item1);
-                CommandCol.Flush(this, v.Item2);
-                PopSet.Flush(this, v.Item3);
+                var (rows, cols, sets) = ((int rows, int cols, int sets))value;
+                CommandRow.Flush(this, rows);
+                CommandCol.Flush(this, cols);
+                PopSet.Flush(this, sets);
             }
         }
     }
