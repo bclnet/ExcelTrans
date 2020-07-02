@@ -25,6 +25,7 @@ namespace ExcelTrans.Services
                 throw new ArgumentNullException(nameof(w));
             if (set == null)
                 throw new ArgumentNullException(nameof(set));
+
             if (settings == null)
                 settings = CsvWriterSettings.DefaultSettings;
             var delimiter = settings.Delimiter[0];

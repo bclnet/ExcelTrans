@@ -19,6 +19,7 @@ namespace ExcelTrans.Commands
         {
             if (cmds == null)
                 throw new ArgumentNullException(nameof(cmds));
+
             When = When.Normal;
             Headers = headers;
             Group = group;

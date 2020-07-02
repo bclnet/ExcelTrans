@@ -11,7 +11,7 @@ namespace ExcelTrans.Utils
     {
         public static readonly List<object> funcs = new List<object>();
         public static readonly List<Type> cmds = new List<Type>() {
-            typeof(CellsStyle), typeof(CellsValue),
+            typeof(CellsStyle), typeof(CellsValidation), typeof(CellsValue),
             typeof(ColumnValue),
             typeof(Command), typeof(CommandCol), typeof(CommandRow),
             typeof(ConditionalFormatting),

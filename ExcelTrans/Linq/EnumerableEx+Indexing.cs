@@ -55,7 +55,8 @@ namespace System.Linq
                 throw new ArgumentOutOfRangeException(nameof(size));
             if (resultSelector == null)
                 throw new ArgumentNullException(nameof(resultSelector));
-            int index = 0;
+
+            var index = 0;
             var items = new TSource[size];
             foreach (var item in source)
             {

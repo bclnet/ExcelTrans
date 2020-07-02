@@ -17,5 +17,7 @@
         RichText,
         RichTextClear,
         StyleName,
+        // validation
+        DataValidation,
     }
 }

@@ -15,15 +15,9 @@ namespace ExcelTrans.Commands
             Cmds = cmds ?? throw new ArgumentNullException(nameof(cmds));
         }
 
-        void IExcelCommand.Read(BinaryReader r)
-        {
-            Cmds = ExcelSerDes.DecodeCommands(r);
-        }
+        void IExcelCommand.Read(BinaryReader r) => Cmds = ExcelSerDes.DecodeCommands(r);
 
-        void IExcelCommand.Write(BinaryWriter w)
-        {
-            ExcelSerDes.EncodeCommands(w, Cmds);
-        }
+        void IExcelCommand.Write(BinaryWriter w) => ExcelSerDes.EncodeCommands(w, Cmds);
 
         void IExcelCommand.Execute(IExcelContext ctx, ref Action after)
         {

@@ -157,8 +157,27 @@ namespace ExcelTrans
                 long.TryParse(v, out var vl) ? vl :
                 (object)v;
 
-        internal static object CastValue(this string v, Type type, object defaultValue = null) => type == null ? v : v != null ? Convert.ChangeType(v, type) : defaultValue;
-        internal static T CastValue<T>(this object v, T defaultValue = default(T)) => v != null ? (T)Convert.ChangeType(v, typeof(T)) : defaultValue;
+        /// <summary>
+        /// Serializes the value.
+        /// </summary>
+        /// <param name="v">The v.</param>
+        /// <param name="type">The type.</param>
+        /// <returns></returns>
+        internal static string SerializeValue(this object v, Type type) =>
+            type == null ? v.ToString() : type.IsArray
+            ? string.Join("|^", ((Array)v).Cast<object>().Select(x => x?.ToString()))
+            : v.ToString();
+
+        internal static object DeserializeValue(this string v, Type type) =>
+            type == null ? v : type.IsArray && type.GetElementType() is Type elemType
+            ? v.Split(new[] { "|^" }, StringSplitOptions.None).Select(x => Convert.ChangeType(x, elemType)).ToArray()
+            : Convert.ChangeType(v, type);
+
+        internal static T CastValue<T>(this object v, T defaultValue = default) => v != null
+            ? typeof(T).IsArray && typeof(T).GetElementType() is Type elemType
+            ? (T)(object)((Array)v).Cast<object>().Select(x => Convert.ChangeType(v, elemType)).ToArray()
+            : (T)Convert.ChangeType(v, typeof(T))
+            : defaultValue;
 
         internal static int RowToInt(string row) => !string.IsNullOrEmpty(row) ? int.Parse(row) : 0;
         internal static int ColToInt(string col) => col.ToUpperInvariant().Aggregate(0, (a, x) => (a * 26) + (x - '@'));

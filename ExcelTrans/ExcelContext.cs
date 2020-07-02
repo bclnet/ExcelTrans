@@ -17,12 +17,17 @@ namespace ExcelTrans
         int DeltaY { get; set; }
         int CsvX { get; set; }
         int CsvY { get; set; }
+        NextDirection NextDirection { get; set; }
         Stack<CommandRow> CmdRows { get; }
         Stack<CommandCol> CmdCols { get; }
         Stack<IExcelSet> Sets { get; }
         Stack<object> Frames { get; }
         object Frame { get; set; }
         void Flush();
+        ExcelRangeBase Get(string cells);
+        ExcelRangeBase Next(ExcelRangeBase range, NextDirection? nextDirection = null);
+        ExcelColumn Next(ExcelColumn column);
+        ExcelRow Next(ExcelRow row);
     }
 
     internal class ExcelContext : IExcelContext
@@ -41,6 +46,7 @@ namespace ExcelTrans
         public int DeltaY { get; set; } = 1;
         public int CsvX { get; set; } = 1;
         public int CsvY { get; set; } = 1;
+        public NextDirection NextDirection { get; set; }
         public Stack<CommandRow> CmdRows { get; } = new Stack<CommandRow>();
         public Stack<CommandCol> CmdCols { get; } = new Stack<CommandCol>();
         public Stack<IExcelSet> Sets { get; } = new Stack<IExcelSet>();
@@ -56,6 +62,12 @@ namespace ExcelTrans
         }
 
         public ExcelWorksheet EnsureWorksheet() => WS ?? (WS = WB.Worksheets.Add($"Sheet {WB.Worksheets.Count + 1}"));
+
+        public ExcelRangeBase Get(string cells) => WS.Cells[this.DecodeAddress(cells)];
+
+        public ExcelRangeBase Next(ExcelRangeBase range, NextDirection? nextDirection = null) => (nextDirection ?? NextDirection) == NextDirection.Column ? range.Offset(0, DeltaX) : range.Offset(DeltaY, 0);
+        public ExcelColumn Next(ExcelColumn col) => null;
+        public ExcelRow Next(ExcelRow row) => null;
 
         public void Flush()
         {

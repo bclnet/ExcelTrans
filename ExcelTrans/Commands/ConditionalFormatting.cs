@@ -27,6 +27,7 @@ namespace ExcelTrans.Commands
         {
             if (string.IsNullOrEmpty(address))
                 throw new ArgumentNullException(nameof(address));
+
             When = When.Normal;
             Address = address;
             Value = value != null ? value is string ? (string)value : JsonConvert.SerializeObject(value) : null;
