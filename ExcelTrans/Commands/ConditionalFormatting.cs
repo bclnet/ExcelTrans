@@ -1,6 +1,6 @@
-﻿using Newtonsoft.Json;
-using System;
+﻿using System;
 using System.IO;
+using System.Text.Json;
 
 namespace ExcelTrans.Commands
 {
@@ -25,12 +25,9 @@ namespace ExcelTrans.Commands
             : this(ExcelService.GetAddress(r, fromRow, fromCol, toRow, toCol), value, formattingKind, priority, stopIfTrue) { }
         public ConditionalFormatting(string address, object value, ConditionalFormattingKind formattingKind, int? priority = null, bool stopIfTrue = false)
         {
-            if (string.IsNullOrEmpty(address))
-                throw new ArgumentNullException(nameof(address));
-
             When = When.Normal;
-            Address = address;
-            Value = value != null ? value is string ? (string)value : JsonConvert.SerializeObject(value) : null;
+            Address = address ?? throw new ArgumentNullException(nameof(address));
+            Value = value != null ? value is string @string ? @string : JsonSerializer.Serialize(value) : null;
             FormattingKind = formattingKind;
             Priority = priority;
             StopIfTrue = stopIfTrue;

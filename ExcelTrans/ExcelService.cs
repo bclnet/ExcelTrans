@@ -1,6 +1,7 @@
 ﻿using ExcelTrans.Commands;
 using ExcelTrans.Services;
 using ExcelTrans.Utils;
+using NPOI.SS.Formula.Functions;
 using OfficeOpenXml;
 using System;
 using System.Collections.Generic;
@@ -43,19 +44,24 @@ namespace ExcelTrans
             using (var s1 = value.stream)
             {
                 s1.Seek(0, SeekOrigin.Begin);
-                var s2 = new MemoryStream(Build(s1));
-                return (s2, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", value.path.Replace(".csv", ".xlsx"));
+                var s2 = new MemoryStream(Build(s1, out var macros));
+                return (s2, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", value.path.Replace(".csv", !macros ? ".xlsx" : ".xlsm"));
             }
         }
 
-        static byte[] Build(Stream s)
+        static byte[] Build(Stream s, out bool macros)
         {
             using (var ctx = new ExcelContext())
             {
                 CsvReader.Read(s, x =>
                 {
                     if (x == null || x.Count == 0 || x[0].StartsWith(Comment)) return true;
-                    else if (x[0].StartsWith(Stream)) { var r = ctx.ExecuteCmd(Decode(x[0]), out var after) != null; after?.Invoke(); return r; }
+                    else if (x[0].StartsWith(Stream))
+                    {
+                        var r = ctx.ExecuteCmd(Decode(x[0]), out var action) != null;
+                        action?.Invoke();
+                        return r;
+                    }
                     else if (x[0].StartsWith(Break)) return false;
                     ctx.AdvanceRow();
                     if (ctx.Sets.Count == 0) ctx.WriteRow(x);
@@ -63,6 +69,7 @@ namespace ExcelTrans
                     return true;
                 }).Any(x => !x);
                 ctx.Flush();
+                macros = ctx.V != null;
                 return ctx.P.GetAsByteArray();
             }
         }
@@ -182,5 +189,46 @@ namespace ExcelTrans
         internal static int RowToInt(string row) => !string.IsNullOrEmpty(row) ? int.Parse(row) : 0;
         internal static int ColToInt(string col) => col.ToUpperInvariant().Aggregate(0, (a, x) => (a * 26) + (x - '@'));
         internal static void CellToInts(string cell, out int row, out int col) { var idx = cell.IndexOfAny("0123456789".ToCharArray()); var val = idx != -1 ? new[] { cell.Substring(0, idx), cell.Substring(idx) } : new[] { cell, string.Empty }; row = RowToInt(val[1]); col = ColToInt(val[0]); }
+
+        #region Measure
+
+        public static void SetTrueColumnWidth(this ExcelColumn column, double width)
+        {
+            // Deduce what the column width would really get set to.
+            var z = width >= (1 + 2 / 3)
+                ? Math.Round((Math.Round(7 * (width - 1 / 256), 0) - 5) / 7, 2)
+                : Math.Round((Math.Round(12 * (width - 1 / 256), 0) - Math.Round(5 * width, 0)) / 12, 2);
+
+            // How far off? (will be less than 1)
+            var errorAmt = width - z;
+
+            // Calculate what amount to tack onto the original amount to result in the closest possible setting.
+            var adj = width >= 1 + 2 / 3
+                ? Math.Round(7 * errorAmt - 7 / 256, 0) / 7
+                : Math.Round(12 * errorAmt - 12 / 256, 0) / 12 + (2 / 12);
+
+            // Set width to a scaled-value that should result in the nearest possible value to the true desired setting.
+            if (z > 0)
+            {
+                column.Width = width + adj;
+                return;
+            }
+            column.Width = 0d;
+        }
+
+        // https://docs.microsoft.com/en-us/office/troubleshoot/excel/determine-column-widths#:~:text=In%20a%20new%20Excel%20workbook,)%2C%20and%20then%20click%20OK.
+        //public static (int pixelWidth, int pixelHeight) GetAddressPixelSize(this IExcelContext ctx, ExcelAddressBase value)
+        //{
+        //    var wb = ((ExcelContext)ctx).WB;
+        //    var normalFont = wb.Styles.NamedStyles.FirstOrDefault(x => x.Name == "Normal")?.Style.Font;
+
+        //    var ws = ((ExcelContext)ctx).WS;
+        //    double pixelWidth = 0f, pixelHeight = 0f;
+        //    for (var col = value.Start.Column; col <= value.End.Column; col++) pixelWidth += ws.Column(col).Width;
+        //    for (var row = value.Start.Row; row <= value.End.Row; row++) pixelHeight += ws.Row(row).Height;
+        //    return ((int)pixelWidth, (int)pixelHeight);
+        //}
+
+        #endregion
     }
 }

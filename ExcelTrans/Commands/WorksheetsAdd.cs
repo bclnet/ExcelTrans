@@ -20,6 +20,7 @@ namespace ExcelTrans.Commands
 
         void IExcelCommand.Execute(IExcelContext ctx, ref Action after)
         {
+            ctx.Flush();
             var ctx2 = (ExcelContext)ctx;
             ctx2.WS = ctx2.WB.Worksheets.Add(Name);
             ctx.XStart = ctx.Y = 1;

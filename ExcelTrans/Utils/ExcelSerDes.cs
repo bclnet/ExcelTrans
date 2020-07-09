@@ -15,11 +15,15 @@ namespace ExcelTrans.Utils
             typeof(ColumnValue),
             typeof(Command), typeof(CommandCol), typeof(CommandRow),
             typeof(ConditionalFormatting),
+            typeof(Drawing),
             typeof(Flush),
             typeof(PopFrame), typeof(PopSet), typeof(PushFrame), typeof(PushSet<>),
+            typeof(Protection),
             typeof(RowValue),
+            typeof(VbaCodeModule), typeof(VbaModule), typeof(VbaReference),
             typeof(ViewAction),
-            typeof(WorkbookOpen), typeof(WorksheetsAdd), typeof(WorksheetsCopy), typeof(WorksheetsDelete), typeof(WorksheetsOpen) };
+            typeof(WorkbookName), typeof(WorkbookOpen), typeof(WorkbookProtection),
+            typeof(WorksheetsAdd), typeof(WorksheetsCopy), typeof(WorksheetsDelete), typeof(WorksheetsOpen) };
 
         public static string Encode(params IExcelCommand[] cmds)
         {

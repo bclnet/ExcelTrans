@@ -4,6 +4,8 @@ using OfficeOpenXml;
 using System;
 using System.Collections.Generic;
 using System.IO;
+using OfficeOpenXml.VBA;
+
 [assembly: InternalsVisibleTo("ExcelTrans.Tests")]
 
 namespace ExcelTrans
@@ -46,7 +48,7 @@ namespace ExcelTrans
         public int DeltaY { get; set; } = 1;
         public int CsvX { get; set; } = 1;
         public int CsvY { get; set; } = 1;
-        public NextDirection NextDirection { get; set; }
+        public NextDirection NextDirection { get; set; } = NextDirection.Column;
         public Stack<CommandRow> CmdRows { get; } = new Stack<CommandRow>();
         public Stack<CommandCol> CmdCols { get; } = new Stack<CommandCol>();
         public Stack<IExcelSet> Sets { get; } = new Stack<IExcelSet>();
@@ -54,12 +56,15 @@ namespace ExcelTrans
         public ExcelPackage P;
         public ExcelWorkbook WB;
         public ExcelWorksheet WS;
+        public ExcelVbaProject V;
 
         public void OpenWorkbook(FileInfo path, string password = null)
         {
             P = password == null ? new ExcelPackage(path) : new ExcelPackage(path, password);
             WB = P.Workbook;
         }
+
+        public ExcelVbaProject EnsureVba() { if (V != null) return V; WB.CreateVBAProject(); V = WB.VbaProject; return V; }
 
         public ExcelWorksheet EnsureWorksheet() => WS ?? (WS = WB.Worksheets.Add($"Sheet {WB.Worksheets.Count + 1}"));
 
@@ -71,6 +76,7 @@ namespace ExcelTrans
 
         public void Flush()
         {
+            if (Sets.Count == 0) this.WriteRowLast(null);
             Frames.Clear();
             CommandRow.Flush(this, 0);
             CommandCol.Flush(this, 0);

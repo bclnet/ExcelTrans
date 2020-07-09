@@ -1,15 +1,17 @@
 ﻿using ExcelTrans.Commands;
-using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
-using NPOI.SS.Formula.Functions;
+using NPOI.SS.Util;
 using OfficeOpenXml;
 using OfficeOpenXml.ConditionalFormatting;
 using OfficeOpenXml.ConditionalFormatting.Contracts;
 using OfficeOpenXml.DataValidation;
 using OfficeOpenXml.DataValidation.Contracts;
 using OfficeOpenXml.DataValidation.Formulas.Contracts;
+using OfficeOpenXml.Drawing;
+using OfficeOpenXml.Drawing.Chart;
 using OfficeOpenXml.Style;
 using OfficeOpenXml.Style.Dxf;
+using OfficeOpenXml.Table.PivotTable;
+using OfficeOpenXml.VBA;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
@@ -17,20 +19,13 @@ using System.Drawing;
 using System.Globalization;
 using System.Linq;
 using System.Reflection;
+using System.Text.Json;
+using System.Xml;
 
 namespace ExcelTrans
 {
     public static class ExcelExtensions
     {
-        static T ToStaticEnum<T>(string name, T defaultValue = default(T)) =>
-            string.IsNullOrEmpty(name) ? defaultValue :
-            (T)typeof(T).GetProperty(name, BindingFlags.Public | BindingFlags.Static)?.GetValue(null);
-        static Color ToColor(string name, Color defaultValue = default(Color)) =>
-            string.IsNullOrEmpty(name) ? defaultValue :
-            name.StartsWith("#") ? ColorTranslator.FromHtml(name) :
-            ToStaticEnum<Color>(name);
-        static T ToEnum<T>(string name, T defaultValue = default) => !string.IsNullOrEmpty(name) ? (T)Enum.Parse(typeof(T), name) : defaultValue;
-        static string NumberformatPrec(string prec, string defaultPrec) => string.IsNullOrEmpty(prec) ? defaultPrec : $"0.{new string('0', int.Parse(prec))}";
 
         #region Execute
 
@@ -130,7 +125,356 @@ namespace ExcelTrans
 
         #endregion
 
+        #region VBA
+
+        public static void VbaCodeModule(this IExcelContext ctx, string name, VbaCode code, VbaModuleKind moduleKind)
+        {
+            var v = ((ExcelContext)ctx).EnsureVba();
+            ExcelVBAModule m;
+            switch (moduleKind)
+            {
+                case VbaModuleKind.CodeModule: m = ((ExcelContext)ctx).WB.CodeModule; break;
+                case VbaModuleKind.Module: m = v.Modules.AddModule(name); break;
+                case VbaModuleKind.Class: m = v.Modules.AddClass(name, true); break;
+                case VbaModuleKind.PrivateClass: m = v.Modules.AddClass(name, false); break;
+                default: throw new ArgumentOutOfRangeException(nameof(moduleKind), moduleKind.ToString());
+            }
+            if (!string.IsNullOrEmpty(code.Name)) m.Name = code.Name;
+            if (code.Description != null) m.Description = code.Description;
+            if (code.Code != null) m.Code = code.ProcessCode();
+            if (code.ReadOnly != null) m.ReadOnly = code.ReadOnly.Value;
+            if (code.Private != null) m.Private = code.Private.Value;
+        }
+
+        public static void VbaModule(this IExcelContext ctx, string name, VbaCode code)
+        {
+            var v = ((ExcelContext)ctx).EnsureVba();
+            var m = v.Modules[name] ?? v.Modules.AddModule(name);
+            if (!string.IsNullOrEmpty(code.Name)) m.Name = code.Name;
+            if (code.Description != null) m.Description = code.Description;
+            if (code.Code != null) m.Code = code.ProcessCode();
+            if (code.ReadOnly != null) m.ReadOnly = code.ReadOnly.Value;
+            if (code.Private != null) m.Private = code.Private.Value;
+        }
+
+        public static void VbaReference(this IExcelContext ctx, VbaLibrary[] libraries)
+        {
+            var references = ((ExcelContext)ctx).EnsureVba().References;
+            foreach (var library in libraries)
+                references.Add(new ExcelVbaReference { Name = library.Name, Libid = library.Libid.ToString() });
+        }
+
+        public static void VbaSignature(this IExcelContext ctx)
+        {
+            var v = ((ExcelContext)ctx).EnsureVba();
+            v.Signature.Certificate = null;
+        }
+
+        public static void VbaProtection(this IExcelContext ctx)
+        {
+            var v = ((ExcelContext)ctx).EnsureVba();
+            v.Protection.SetPassword("EPPlus");
+        }
+
+        #endregion
+
+        #region Workbook
+
+        public static void WorkbookProtection(this IExcelContext ctx, object value, WorkbookProtectionKind protectionKind)
+        {
+            var protection = ((ExcelContext)ctx).WB.Protection;
+            switch (protectionKind)
+            {
+                case WorkbookProtectionKind.LockStructure: protection.LockStructure = true; break;
+                case WorkbookProtectionKind.LockWindows: protection.LockWindows = true; break;
+                case WorkbookProtectionKind.LockRevision: protection.LockRevision = true; break;
+                case WorkbookProtectionKind.SetPassword: protection.SetPassword(null); break;
+                default: throw new ArgumentOutOfRangeException(nameof(protectionKind));
+            }
+        }
+
+        public static void WorkbookName(this IExcelContext ctx, string name, int row, int col, WorkbookNameKind nameKind = WorkbookNameKind.Add) => WorkbookName(ctx, name, ExcelService.GetAddress(row, col), nameKind);
+        public static void WorkbookName(this IExcelContext ctx, string name, int fromRow, int fromCol, int toRow, int toCol, WorkbookNameKind nameKind = WorkbookNameKind.Add) => WorkbookName(ctx, name, ExcelService.GetAddress(fromRow, fromCol, toRow, toCol), nameKind);
+        public static void WorkbookName(this IExcelContext ctx, string name, Address r, WorkbookNameKind nameKind = WorkbookNameKind.Add) => WorkbookName(ctx, name, ExcelService.GetAddress(r, 0, 0), nameKind);
+        public static void WorkbookName(this IExcelContext ctx, string name, Address r, int row, int col, WorkbookNameKind nameKind = WorkbookNameKind.Add) => WorkbookName(ctx, name, ExcelService.GetAddress(r, row, col), nameKind);
+        public static void WorkbookName(this IExcelContext ctx, string name, Address r, int fromRow, int fromCol, int toRow, int toCol, WorkbookNameKind nameKind = WorkbookNameKind.Add) => WorkbookName(ctx, name, ExcelService.GetAddress(r, fromRow, fromCol, toRow, toCol), nameKind);
+        public static void WorkbookName(this IExcelContext ctx, string name, string cells, WorkbookNameKind nameKind = WorkbookNameKind.Add)
+        {
+            var names = ((ExcelContext)ctx).WB.Names;
+            switch (nameKind)
+            {
+                case WorkbookNameKind.Add: var range = ctx.Get(cells); names.Add(name, range); break;
+                case WorkbookNameKind.AddFormula: names.AddFormula(name, cells); break;
+                case WorkbookNameKind.AddValue: names.AddValue(name, cells); break;
+                case WorkbookNameKind.Remove: names.Remove(name); break;
+                default: throw new ArgumentOutOfRangeException(nameof(nameKind));
+            }
+        }
+
+        #endregion
+
         #region Worksheet
+
+        // https://www.c-sharpcorner.com/blogs/how-to-adding-pictures-or-images-in-excel-sheet-using-epplus-net-application-c-sharp-part-five
+        public static void Drawing(this IExcelContext ctx, string address, string name, object value, DrawingKind drawingKind)
+        {
+            // parsing base
+            void ApplyDrawingBorder(ExcelDrawingBorder val, JsonElement t)
+            {
+                if (t.TryGetProperty("fill", out var z2)) ApplyDrawingFill(val.Fill, z2);
+                if (t.TryGetProperty("lineStyle", out z2)) val.LineStyle = ToEnum<eLineStyle>(z2);
+                if (t.TryGetProperty("lineCap", out z2)) val.LineCap = ToEnum<eLineCap>(z2);
+                if (t.TryGetProperty("width", out z2)) val.Width = z2.GetInt32();
+            }
+            void ApplyDrawingLineEnd(ExcelDrawingLineEnd val, JsonElement t)
+            {
+                if (t.TryGetProperty("headEnd", out var z2)) val.HeadEnd = ToEnum<eEndStyle>(z2);
+                if (t.TryGetProperty("tailEnd", out z2)) val.TailEnd = ToEnum<eEndStyle>(z2);
+                if (t.TryGetProperty("tailEndSizeWidth", out z2)) val.TailEndSizeWidth = ToEnum<eEndSize>(z2);
+                if (t.TryGetProperty("tailEndSizeHeight", out z2)) val.TailEndSizeHeight = ToEnum<eEndSize>(z2);
+                if (t.TryGetProperty("headEndSizeWidth", out z2)) val.HeadEndSizeWidth = ToEnum<eEndSize>(z2);
+                if (t.TryGetProperty("headEndSizeHeight", out z2)) val.HeadEndSizeHeight = ToEnum<eEndSize>(z2);
+            }
+            void ApplyDrawingFill(ExcelDrawingFill val, JsonElement t)
+            {
+                if (t.TryGetProperty("orientation", out var z2)) val.Style = ToEnum<eFillStyle>(z2);
+                if (t.TryGetProperty("color", out z2)) val.Color = ParseColor(z2.GetString());
+                if (t.TryGetProperty("transparancy", out z2)) val.Transparancy = z2.GetInt32();
+            }
+            void ApplyView3D(ExcelView3D val, JsonElement t)
+            {
+                if (t.TryGetProperty("perspective", out var z2)) val.Perspective = z2.GetDecimal();
+                if (t.TryGetProperty("rotX", out z2)) val.RotX = z2.GetDecimal();
+                if (t.TryGetProperty("rotY", out z2)) val.RotY = z2.GetDecimal();
+                if (t.TryGetProperty("rightAngleAxes", out z2)) val.RightAngleAxes = z2.GetBoolean();
+                if (t.TryGetProperty("depthPercent", out z2)) val.DepthPercent = z2.GetInt32();
+                if (t.TryGetProperty("heightPercent", out z2)) val.HeightPercent = z2.GetInt32();
+            }
+            void ApplyTextFont(ExcelTextFont val, JsonElement t)
+            {
+                if (t.TryGetProperty("latinFont", out var z2)) val.LatinFont = z2.GetString();
+                if (t.TryGetProperty("complexFont", out z2)) val.ComplexFont = z2.GetString();
+                if (t.TryGetProperty("bold", out z2)) val.Bold = z2.GetBoolean();
+                if (t.TryGetProperty("underLine", out z2)) val.UnderLine = ToEnum<eUnderLineType>(z2);
+                if (t.TryGetProperty("underLineColor", out z2)) val.UnderLineColor = ParseColor(z2.GetString());
+                if (t.TryGetProperty("italic", out z2)) val.Italic = z2.GetBoolean();
+                if (t.TryGetProperty("strike", out z2)) val.Strike = ToEnum<eStrikeType>(z2);
+                if (t.TryGetProperty("size", out z2)) val.Size = z2.GetSingle();
+                if (t.TryGetProperty("color", out z2)) val.Color = ParseColor(z2.GetString());
+            }
+            void ApplyParagraphCollection(ExcelParagraphCollection val, JsonElement t)
+            {
+            }
+            ExcelPivotTable ParsePivotTable(JsonElement t)
+            {
+                return null;
+            }
+
+            // parsing drawing
+            void ApplyPosition(ExcelDrawing.ExcelPosition val, JsonElement t)
+            {
+                if (t.TryGetProperty("column", out var z2)) val.Column = z2.GetInt32();
+                if (t.TryGetProperty("row", out z2)) val.Row = z2.GetInt32();
+                if (t.TryGetProperty("columnOff", out z2)) val.ColumnOff = z2.GetInt32();
+                if (t.TryGetProperty("rowOff", out z2)) val.RowOff = z2.GetInt32();
+            }
+            void ApplyDrawing(ExcelDrawing val, JsonElement t)
+            {
+                if (t.TryGetProperty("editAs", out var z2)) val.EditAs = ToEnum<eEditAs>(z2);
+                if (t.TryGetProperty("name", out z2)) val.Name = z2.GetString();
+                if (t.TryGetProperty("from", out z2)) ApplyPosition(val.From, z2);
+                if (t.TryGetProperty("to", out z2)) ApplyPosition(val.To, z2);
+                if (t.TryGetProperty("print", out z2)) val.Print = z2.GetBoolean();
+                if (t.TryGetProperty("locked", out z2)) val.Locked = z2.GetBoolean();
+                if (t.TryGetProperty("setPosition", out z2) && z2.GetArrayLength() == 2 && z2.EnumerateArray().Cast<JsonElement>().Select(x => x.GetInt32()) is int[] a0) val.SetPosition(a0[0], a0[1]);
+                if (t.TryGetProperty("setPosition", out z2) && z2.GetArrayLength() == 4 && z2.EnumerateArray().Cast<JsonElement>().Select(x => x.GetInt32()) is int[] a1) val.SetPosition(a1[0], a1[1], a1[2], a1[3]);
+                if (t.TryGetProperty("setSize", out z2) && z2.GetArrayLength() == 1 && z2.EnumerateArray().Cast<JsonElement>().Select(x => x.GetInt32()) is int[] a2) val.SetSize(a2[0]);
+                if (t.TryGetProperty("setSize", out z2) && z2.GetArrayLength() == 2 && z2.EnumerateArray().Cast<JsonElement>().Select(x => x.GetInt32()) is int[] a3) val.SetSize(a3[0], a3[1]);
+            }
+
+            // parsing chart
+            void ApplyChartTitle(ExcelChartTitle val, JsonElement t)
+            {
+                if (t.TryGetProperty("text", out var z2)) val.Text = z2.GetString();
+                if (t.TryGetProperty("overlay", out z2)) val.Overlay = z2.GetBoolean();
+                if (t.TryGetProperty("border", out z2)) ApplyDrawingBorder(val.Border, z2);
+                if (t.TryGetProperty("fill", out z2)) ApplyDrawingFill(val.Fill, z2);
+                if (t.TryGetProperty("font", out z2)) ApplyTextFont(val.Font, z2);
+                if (t.TryGetProperty("richText", out z2)) ApplyParagraphCollection(val.RichText, z2);
+                if (t.TryGetProperty("anchorCtr", out z2)) val.AnchorCtr = z2.GetBoolean();
+                if (t.TryGetProperty("anchor", out z2)) val.Anchor = ToEnum<eTextAnchoringType>(z2);
+                if (t.TryGetProperty("textVertical", out z2)) val.TextVertical = ToEnum<eTextVerticalType>(z2);
+                if (t.TryGetProperty("logRotationBase", out z2)) val.Rotation = z2.GetDouble();
+            }
+            void ApplyChartAxis(ExcelChartAxis val, JsonElement t)
+            {
+                if (t.TryGetProperty("font", out var z2)) ApplyTextFont(val.Font, z2);
+                if (t.TryGetProperty("orientation", out z2)) val.Orientation = ToEnum<eAxisOrientation>(z2);
+                if (t.TryGetProperty("logBase", out z2)) val.LogBase = z2.GetDouble();
+                if (t.TryGetProperty("minorTimeUnit", out z2)) val.MinorTimeUnit = ToEnum<eTimeUnit>(z2);
+                if (t.TryGetProperty("majorUnit", out z2)) val.MajorUnit = z2.GetDouble();
+                if (t.TryGetProperty("maxValue", out z2)) val.MaxValue = z2.GetDouble();
+                if (t.TryGetProperty("minValue", out z2)) val.MinValue = z2.GetDouble();
+                if (t.TryGetProperty("title", out z2)) ApplyChartTitle(val.Title, z2);
+                if (t.TryGetProperty("displayUnit", out z2)) val.DisplayUnit = z2.GetDouble();
+                if (t.TryGetProperty("tickLabelPosition", out z2)) val.TickLabelPosition = ToEnum<eTickLabelPosition>(z2);
+                if (t.TryGetProperty("deleted", out z2)) val.Deleted = z2.GetBoolean();
+                if (t.TryGetProperty("minorGridlines", out z2)) ApplyDrawingBorder(val.MinorGridlines, z2);
+                if (t.TryGetProperty("border", out z2)) ApplyDrawingBorder(val.Border, z2);
+                if (t.TryGetProperty("fill", out z2)) ApplyDrawingFill(val.Fill, z2);
+                if (t.TryGetProperty("labelPosition", out z2)) val.LabelPosition = ToEnum<eTickLabelPosition>(z2);
+                if (t.TryGetProperty("sourceLinked", out z2)) val.SourceLinked = z2.GetBoolean();
+                if (t.TryGetProperty("format", out z2)) val.Format = z2.GetString();
+                if (t.TryGetProperty("crossesAt", out z2)) val.CrossesAt = z2.GetDouble();
+                if (t.TryGetProperty("crossBetween", out z2)) val.CrossBetween = ToEnum<eCrossBetween>(z2);
+                if (t.TryGetProperty("crosses", out z2)) val.Crosses = ToEnum<eCrosses>(z2);
+                //if (t.TryGetProperty("axisPosition", out z2)) val.AxisPosition = ToEnum<eAxisPosition>(z2);
+                if (t.TryGetProperty("minorTickMark", out z2)) val.MinorTickMark = ToEnum<eAxisTickMark>(z2);
+                if (t.TryGetProperty("majorTickMark", out z2)) val.MajorTickMark = ToEnum<eAxisTickMark>(z2);
+                if (t.TryGetProperty("majorGridlines", out z2)) ApplyDrawingBorder(val.MajorGridlines, z2);
+                if (t.TryGetProperty("removeGridlines", out z2)) val.RemoveGridlines();
+            }
+            void ApplyChartDataTable(ExcelChartDataTable val, JsonElement t)
+            {
+                if (t.TryGetProperty("showHorizontalBorder", out var z2)) val.ShowHorizontalBorder = z2.GetBoolean();
+                if (t.TryGetProperty("showVerticalBorder", out z2)) val.ShowVerticalBorder = z2.GetBoolean();
+                if (t.TryGetProperty("showOutline", out z2)) val.ShowOutline = z2.GetBoolean();
+                if (t.TryGetProperty("showKeys", out z2)) val.ShowKeys = z2.GetBoolean();
+                if (t.TryGetProperty("fill", out z2)) ApplyDrawingFill(val.Fill, z2);
+                if (t.TryGetProperty("border", out z2)) ApplyDrawingBorder(val.Border, z2);
+                if (t.TryGetProperty("font", out z2)) ApplyTextFont(val.Font, z2);
+            }
+            void ApplyChartPlotArea(ExcelChartPlotArea val, JsonElement t)
+            {
+                // if (t.TryGetProperty("chartTypes", out var z2)) ApplyChartTypes(val.ChartTypes, z2);
+                if (t.TryGetProperty("dataTable", out var z2)) ApplyChartDataTable(val.DataTable, z2);
+                if (t.TryGetProperty("fill", out z2)) ApplyDrawingFill(val.Fill, z2);
+                if (t.TryGetProperty("border", out z2)) ApplyDrawingBorder(val.Border, z2);
+            }
+            void ApplyChartLegend(ExcelChartLegend val, JsonElement t)
+            {
+                if (t.TryGetProperty("position", out var z2)) val.Position = ToEnum<eLegendPosition>(z2);
+                if (t.TryGetProperty("overlay", out z2)) val.Overlay = z2.GetBoolean();
+                if (t.TryGetProperty("fill", out z2)) ApplyDrawingFill(val.Fill, z2);
+                if (t.TryGetProperty("border", out z2)) ApplyDrawingBorder(val.Border, z2);
+                if (t.TryGetProperty("font", out z2)) ApplyTextFont(val.Font, z2);
+            }
+            void ApplyChartAxis2(ExcelChartAxis[] val, JsonElement t)
+            {
+            }
+            void ApplyChartSeries(ExcelChartSeries val, JsonElement t)
+            {
+            }
+            void ApplyChartXml(XmlDocument val, JsonElement t)
+            {
+            }
+            ExcelDrawing ApplyChart(ExcelChart val, JsonElement t)
+            {
+                ApplyDrawing(val, t);
+                if (t.TryGetProperty("yAxis", out var z2)) ApplyChartAxis(val.YAxis, z2);
+                if (t.TryGetProperty("useSecondaryAxis", out z2)) val.UseSecondaryAxis = z2.GetBoolean();
+                if (t.TryGetProperty("style", out z2)) val.Style = ToEnum<eChartStyle>(z2);
+                if (t.TryGetProperty("roundedCorners", out z2)) val.RoundedCorners = z2.GetBoolean();
+                if (t.TryGetProperty("showHiddenData", out z2)) val.ShowHiddenData = z2.GetBoolean();
+                if (t.TryGetProperty("displayBlanksAs", out z2)) val.DisplayBlanksAs = ToEnum<eDisplayBlanksAs>(z2);
+                if (t.TryGetProperty("plotArea", out z2)) ApplyChartPlotArea(val.PlotArea, z2);
+                if (t.TryGetProperty("yAxis", out z2)) ApplyChartAxis(val.XAxis, z2);
+                if (t.TryGetProperty("legend", out z2)) ApplyChartLegend(val.Legend, z2);
+                if (t.TryGetProperty("border", out z2)) ApplyDrawingBorder(val.Border, z2);
+                if (t.TryGetProperty("fill", out z2)) ApplyDrawingFill(val.Fill, z2);
+                if (t.TryGetProperty("view3D", out z2)) ApplyView3D(val.View3D, z2);
+                //if (t.TryGetProperty("grouping", out z2)) val.Grouping = ToEnum<eGrouping>(z2.GetString());
+                if (t.TryGetProperty("showDataLabelsOverMaximum", out z2)) val.ShowDataLabelsOverMaximum = z2.GetBoolean();
+                if (t.TryGetProperty("axis", out z2)) ApplyChartAxis2(val.Axis, z2);
+                if (t.TryGetProperty("series", out z2)) ApplyChartSeries(val.Series, z2);
+                if (t.TryGetProperty("title", out z2)) ApplyChartTitle(val.Title, z2);
+                if (t.TryGetProperty("chartXml", out z2)) ApplyChartXml(val.ChartXml, z2);
+                if (t.TryGetProperty("varyColors", out z2)) val.VaryColors = z2.GetBoolean();
+                //if (t.TryGetProperty("pivotTableSource", out z2)) ParsePivotTable(val.PivotTableSource, z2);
+                return val;
+            }
+
+            // parsing picture
+            ExcelDrawing ApplyPicture(ExcelPicture val, JsonElement t)
+            {
+                ApplyDrawing(val, t);
+                //if (t.TryGetProperty("image", out var z2)) val.Image = ParseImage(z2.GetString());
+                //if (t.TryGetProperty("imageFormat", out z2)) ApplyImageFormat(val.ImageFormat, z2);
+                if (t.TryGetProperty("fill", out var z2)) ApplyDrawingFill(val.Fill, z2);
+                if (t.TryGetProperty("border", out z2)) ApplyDrawingBorder(val.Border, z2);
+                //if (t.TryGetProperty("hyperlink", out z2)) val.Hyperlink = new Uri(z2.GetString());
+                return val;
+            }
+
+            // parsing shape
+            ExcelDrawing ApplyShape(ExcelShape val, JsonElement t)
+            {
+                ApplyDrawing(val, t);
+                //if (t.TryGetProperty("style", out var z2)) val.Style = ToEnum<eShapeStyle>(z2);
+                if (t.TryGetProperty("fill", out var z2)) ApplyDrawingFill(val.Fill, z2);
+                if (t.TryGetProperty("border", out z2)) ApplyDrawingBorder(val.Border, z2);
+                if (t.TryGetProperty("lineEnds", out z2)) ApplyDrawingLineEnd(val.LineEnds, z2);
+                if (t.TryGetProperty("font", out z2)) ApplyTextFont(val.Font, z2);
+                if (t.TryGetProperty("text", out z2)) val.Text = z2.GetString();
+                if (t.TryGetProperty("lockText", out z2)) val.LockText = z2.GetBoolean();
+                if (t.TryGetProperty("richText", out z2)) ApplyParagraphCollection(val.RichText, z2);
+                if (t.TryGetProperty("textAnchoring", out z2)) val.TextAnchoring = ToEnum<eTextAnchoringType>(z2);
+                if (t.TryGetProperty("textAnchoringControl", out z2)) val.TextAnchoringControl = z2.GetBoolean();
+                if (t.TryGetProperty("textAlignment", out z2)) val.TextAlignment = ToEnum<eTextAlignment>(z2);
+                if (t.TryGetProperty("indent", out z2)) val.Indent = z2.GetInt32();
+                if (t.TryGetProperty("textVertical", out z2)) val.TextVertical = ToEnum<eTextVerticalType>(z2);
+                return val;
+            }
+
+            // drawings
+            var drawings = ((ExcelContext)ctx).WS.Drawings;
+            var token = JsonDocument.Parse(value is string @string ? @string : JsonSerializer.Serialize(value)).RootElement;
+            ExcelDrawing drawing;
+            switch (drawingKind)
+            {
+                case DrawingKind.AddChart:
+                    {
+                        var chartType = token.TryGetProperty("type", out var z2) ? ToEnum<eChartType>(z2) : eChartType.Pie;
+                        var pivotTableSource = token.TryGetProperty("pivotTableSource", out z2) ? ParsePivotTable(z2) : null;
+                        if (pivotTableSource == null) drawing = ApplyChart(drawings.AddChart(name, chartType), token);
+                        else drawing = ApplyChart(drawings.AddChart(name, chartType, pivotTableSource), token);
+                    }
+                    break;
+                case DrawingKind.AddPicture:
+                    {
+                        var image = token.TryGetProperty("image", out var z2) ? ParseImage(z2) : null;
+                        var hyperlink = token.TryGetProperty("hyperlink", out z2) ? new Uri(z2.GetString()) : null;
+                        if (hyperlink == null) drawing = ApplyPicture(drawings.AddPicture(name, image), token);
+                        else drawing = ApplyPicture(drawings.AddPicture(name, image, hyperlink), token);
+                    }
+                    break;
+                case DrawingKind.AddShape:
+                    {
+                        var style = token.TryGetProperty("style", out var z2) ? (eShapeStyle?)ToEnum<eShapeStyle>(z2) : null;
+                        if (style == null) return;
+                        drawing = ApplyShape(drawings.AddShape(name, style.Value), token);
+                    }
+                    break;
+                case DrawingKind.Clear: drawings.Clear(); return;
+                case DrawingKind.Remove: drawings.Remove(name); return;
+                default: throw new ArgumentOutOfRangeException(nameof(drawingKind));
+            }
+
+            // address
+            if (string.IsNullOrEmpty(address))
+                return;
+            var range = ctx.Get(address);
+            if (!token.TryGetProperty("from", out var _))
+            {
+                drawing.From.Column = range.Start.Column;
+                drawing.From.Row = range.Start.Row;
+            }
+            if (!token.TryGetProperty("to", out var _))
+            {
+                drawing.To.Column = range.End.Column + 1;
+                drawing.To.Row = range.End.Row + 1;
+            }
+        }
 
         public static void ViewAction(this IExcelContext ctx, object value, ViewActionKind actionKind)
         {
@@ -144,6 +488,11 @@ namespace ExcelTrans
             }
         }
 
+        public static void Protection(this IExcelContext ctx, object value, WorkbookProtectionKind protectionKind)
+        {
+            var protection = ((ExcelContext)ctx).WS.Protection;
+        }
+
         public static void ConditionalFormatting(this IExcelContext ctx, int row, int col, object value, ConditionalFormattingKind formattingKind, int? priority, bool stopIfTrue) => ConditionalFormatting(ctx, ExcelService.GetAddress(row, col), value, formattingKind, priority, stopIfTrue);
         public static void ConditionalFormatting(this IExcelContext ctx, int fromRow, int fromCol, int toRow, int toCol, object value, ConditionalFormattingKind formattingKind, int? priority, bool stopIfTrue) => ConditionalFormatting(ctx, ExcelService.GetAddress(fromRow, fromCol, toRow, toCol), value, formattingKind, priority, stopIfTrue);
         public static void ConditionalFormatting(this IExcelContext ctx, Address r, object value, ConditionalFormattingKind formattingKind, int? priority, bool stopIfTrue) => ConditionalFormatting(ctx, ExcelService.GetAddress(r, 0, 0), value, formattingKind, priority, stopIfTrue);
@@ -151,23 +500,24 @@ namespace ExcelTrans
         public static void ConditionalFormatting(this IExcelContext ctx, Address r, int fromRow, int fromCol, int toRow, int toCol, object value, ConditionalFormattingKind formattingKind, int? priority, bool stopIfTrue) => ConditionalFormatting(ctx, ExcelService.GetAddress(r, fromRow, fromCol, toRow, toCol), value, formattingKind, priority, stopIfTrue);
         public static void ConditionalFormatting(this IExcelContext ctx, string address, object value, ConditionalFormattingKind formattingKind, int? priority, bool stopIfTrue)
         {
-            void toColorScale(ExcelConditionalFormattingColorScaleValue val, JToken t)
+            void ApplyColorScale(ExcelConditionalFormattingColorScaleValue val, JsonElement t)
             {
-                if (t == null) return;
-                val.Type = ToEnum<eExcelConditionalFormattingValueObjectType>((string)t["type"]);
-                val.Color = ToColor((string)t["color"], Color.White);
-                val.Value = t["value"].CastValue<double>();
-                val.Formula = (string)t["formula"];
+                if (t.TryGetProperty("type", out var z2)) val.Type = ToEnum<eExcelConditionalFormattingValueObjectType>(z2);
+                if (t.TryGetProperty("color", out z2)) val.Color = ParseColor(z2.GetString(), Color.White);
+                if (t.TryGetProperty("value", out z2)) val.Value = z2.GetDouble();
+                if (t.TryGetProperty("formula", out z2)) val.Formula = z2.GetString();
             }
-            void toIconDataBar(ExcelConditionalFormattingIconDataBarValue val, JToken t)
+            void ApplyIconDataBar(ExcelConditionalFormattingIconDataBarValue val, JsonElement t)
             {
-                if (t == null) return;
-                val.Type = ToEnum<eExcelConditionalFormattingValueObjectType>((string)t["type"]);
-                val.GreaterThanOrEqualTo = t["gte"].CastValue<bool>();
-                val.Value = t["value"].CastValue<double>();
-                val.Formula = (string)t["formula"];
+                if (t.TryGetProperty("type", out var z2)) val.Type = ToEnum<eExcelConditionalFormattingValueObjectType>(z2);
+                if (t.TryGetProperty("gte", out z2)) val.GreaterThanOrEqualTo = z2.GetBoolean();
+                if (t.TryGetProperty("value", out z2)) val.Value = z2.GetDouble();
+                if (t.TryGetProperty("formula", out z2)) val.Formula = z2.GetString();
             }
-            var token = value != null ? JToken.Parse(value is string ? (string)value : JsonConvert.SerializeObject(value)) : null;
+            if (value == null)
+                throw new ArgumentNullException(nameof(value));
+
+            var token = JsonDocument.Parse(value is string @string ? @string : JsonSerializer.Serialize(value)).RootElement;
             var formatting = ((ExcelContext)ctx).WS.ConditionalFormatting;
             var ruleAddress = new ExcelAddress(ctx.DecodeAddress(address));
             IExcelConditionalFormattingWithStdDev stdDev = null;
@@ -193,10 +543,10 @@ namespace ExcelTrans
                 case ConditionalFormattingKind.ContainsText: rule = formatting.AddContainsText(ruleAddress); text = (IExcelConditionalFormattingWithText)rule; break;
                 case ConditionalFormattingKind.Databar:
                     {
-                        var r = formatting.AddDatabar(ruleAddress, ToStaticEnum<Color>((string)token["color"])); rule = r;
-                        r.ShowValue = token["showValue"].CastValue<bool>();
-                        toIconDataBar(r.LowValue, token["low"]);
-                        toIconDataBar(r.HighValue, token["high"]);
+                        var r = formatting.AddDatabar(ruleAddress, token.TryGetProperty("showValue", out var z2) ? ToStaticEnum<Color>(z2.GetString()) : Color.Yellow); rule = r;
+                        if (token.TryGetProperty("showValue", out z2)) r.ShowValue = z2.GetBoolean();
+                        if (token.TryGetProperty("low", out z2)) ApplyIconDataBar(r.LowValue, z2);
+                        if (token.TryGetProperty("high", out z2)) ApplyIconDataBar(r.HighValue, z2);
                     }
                     break;
                 case ConditionalFormattingKind.DuplicateValues: rule = formatting.AddDuplicateValues(ruleAddress); break;
@@ -206,24 +556,24 @@ namespace ExcelTrans
                 case ConditionalFormattingKind.FiveIconSet:
                     {
                         var r = formatting.AddFiveIconSet(ruleAddress, eExcelconditionalFormatting5IconsSetType.Arrows); rule = r;
-                        r.Reverse = token["reverse"].CastValue<bool>();
-                        r.ShowValue = token["showValue"].CastValue<bool>();
-                        toIconDataBar(r.Icon1, token["icon1"]);
-                        toIconDataBar(r.Icon2, token["icon2"]);
-                        toIconDataBar(r.Icon3, token["icon3"]);
-                        toIconDataBar(r.Icon4, token["icon4"]);
-                        toIconDataBar(r.Icon5, token["icon5"]);
+                        if (token.TryGetProperty("reverse", out var z2)) r.Reverse = z2.GetBoolean();
+                        if (token.TryGetProperty("showValue", out z2)) r.ShowValue = z2.GetBoolean();
+                        if (token.TryGetProperty("icon1", out z2)) ApplyIconDataBar(r.Icon1, z2);
+                        if (token.TryGetProperty("icon2", out z2)) ApplyIconDataBar(r.Icon2, z2);
+                        if (token.TryGetProperty("icon3", out z2)) ApplyIconDataBar(r.Icon3, z2);
+                        if (token.TryGetProperty("icon4", out z2)) ApplyIconDataBar(r.Icon4, z2);
+                        if (token.TryGetProperty("icon5", out z2)) ApplyIconDataBar(r.Icon5, z2);
                     }
                     break;
                 case ConditionalFormattingKind.FourIconSet:
                     {
                         var r = formatting.AddFourIconSet(ruleAddress, eExcelconditionalFormatting4IconsSetType.Arrows); rule = r;
-                        r.Reverse = token["reverse"].CastValue<bool>();
-                        r.ShowValue = token["showValue"].CastValue<bool>();
-                        toIconDataBar(r.Icon1, token["icon1"]);
-                        toIconDataBar(r.Icon2, token["icon2"]);
-                        toIconDataBar(r.Icon3, token["icon3"]);
-                        toIconDataBar(r.Icon4, token["icon4"]);
+                        if (token.TryGetProperty("reverse", out var z2)) r.Reverse = z2.GetBoolean();
+                        if (token.TryGetProperty("showValue", out z2)) r.ShowValue = z2.GetBoolean();
+                        if (token.TryGetProperty("icon1", out z2)) ApplyIconDataBar(r.Icon1, z2);
+                        if (token.TryGetProperty("icon2", out z2)) ApplyIconDataBar(r.Icon2, z2);
+                        if (token.TryGetProperty("icon3", out z2)) ApplyIconDataBar(r.Icon3, z2);
+                        if (token.TryGetProperty("icon4", out z2)) ApplyIconDataBar(r.Icon4, z2);
                     }
                     break;
                 case ConditionalFormattingKind.GreaterThan: rule = formatting.AddGreaterThan(ruleAddress); formula = (IExcelConditionalFormattingWithFormula)rule; break;
@@ -245,19 +595,19 @@ namespace ExcelTrans
                 case ConditionalFormattingKind.ThreeColorScale:
                     {
                         var r = formatting.AddThreeColorScale(ruleAddress); rule = r;
-                        toColorScale(r.LowValue, token["low"]);
-                        toColorScale(r.HighValue, token["high"]);
-                        toColorScale(r.MiddleValue, token["middle"]);
+                        if (token.TryGetProperty("low", out var z2)) ApplyColorScale(r.LowValue, z2);
+                        if (token.TryGetProperty("high", out z2)) ApplyColorScale(r.HighValue, z2);
+                        if (token.TryGetProperty("middle", out z2)) ApplyColorScale(r.MiddleValue, z2);
                     }
                     break;
                 case ConditionalFormattingKind.ThreeIconSet:
                     {
                         var r = formatting.AddThreeIconSet(ruleAddress, eExcelconditionalFormatting3IconsSetType.Arrows); rule = r;
-                        r.Reverse = token["reverse"].CastValue<bool>();
-                        r.ShowValue = token["showValue"].CastValue<bool>();
-                        toIconDataBar(r.Icon1, token["icon1"]);
-                        toIconDataBar(r.Icon2, token["icon2"]);
-                        toIconDataBar(r.Icon3, token["icon3"]);
+                        if (token.TryGetProperty("reverse", out var z2)) r.Reverse = z2.GetBoolean();
+                        if (token.TryGetProperty("showValue", out z2)) r.ShowValue = z2.GetBoolean();
+                        if (token.TryGetProperty("icon1", out z2)) ApplyIconDataBar(r.Icon1, z2);
+                        if (token.TryGetProperty("icon2", out z2)) ApplyIconDataBar(r.Icon2, z2);
+                        if (token.TryGetProperty("icon3", out z2)) ApplyIconDataBar(r.Icon3, z2);
                     }
                     break;
                 case ConditionalFormattingKind.Today: rule = formatting.AddToday(ruleAddress); break;
@@ -267,8 +617,8 @@ namespace ExcelTrans
                 case ConditionalFormattingKind.TwoColorScale:
                     {
                         var r = formatting.AddTwoColorScale(ruleAddress); rule = r;
-                        toColorScale(r.LowValue, token["low"]);
-                        toColorScale(r.HighValue, token["high"]);
+                        if (token.TryGetProperty("low", out var z2)) ApplyColorScale(r.LowValue, z2);
+                        if (token.TryGetProperty("high", out z2)) ApplyColorScale(r.HighValue, z2);
                     }
                     break;
                 case ConditionalFormattingKind.UniqueValues: rule = formatting.AddUniqueValues(ruleAddress); break;
@@ -276,23 +626,24 @@ namespace ExcelTrans
                 default: throw new ArgumentOutOfRangeException(nameof(formattingKind));
             }
             // CUSTOM
-            if (stdDev != null) stdDev.StdDev = token["stdDev"].CastValue<ushort>();
-            if (text != null) text.Text = (string)token["text"];
-            if (formula != null) formula.Formula = (string)token["formula"];
-            if (formula2 != null) formula2.Formula2 = (string)token["formula2"];
-            if (rank != null) rank.Rank = token["rank"].CastValue<ushort>();
+            if (stdDev != null && token.TryGetProperty("stdDev", out var z)) stdDev.StdDev = z.GetUInt16();
+            if (text != null && token.TryGetProperty("text", out z)) text.Text = z.GetString();
+            if (formula != null && token.TryGetProperty("formula", out z)) formula.Formula = z.GetString();
+            if (formula2 != null && token.TryGetProperty("formula2", out z)) formula2.Formula2 = z.GetString();
+            if (rank != null && token.TryGetProperty("rank", out z)) rank.Rank = z.GetUInt16();
             // RULE
             if (priority != null) rule.Priority = priority.Value;
             rule.StopIfTrue = stopIfTrue;
-            var stylesAsToken = token["styles"];
-            var styles =
-                stylesAsToken == null ? null :
-                stylesAsToken.Type == JTokenType.String ? new[] { stylesAsToken.ToObject<string>() } :
-                stylesAsToken.Type == JTokenType.Array ? stylesAsToken.ToObject<string[]>() :
-                null;
-            if (styles != null)
-                foreach (var style in styles)
-                    ApplyCellStyle(style, null, rule.Style);
+            if (token.TryGetProperty("styles", out z))
+            {
+                var styles =
+                    z.ValueKind == JsonValueKind.String ? new[] { z.GetString() } :
+                    z.ValueKind == JsonValueKind.Array ? z.EnumerateArray().Select(x => x.GetString()) :
+                    null;
+                if (styles != null)
+                    foreach (var style in styles)
+                        ApplyCellStyle(style, null, rule.Style);
+            }
         }
 
         #endregion
@@ -443,30 +794,6 @@ namespace ExcelTrans
             }
         }
 
-        public static void SetTrueColumnWidth(this ExcelColumn column, double width)
-        {
-            // Deduce what the column width would really get set to.
-            var z = width >= (1 + 2 / 3)
-                ? Math.Round((Math.Round(7 * (width - 1 / 256), 0) - 5) / 7, 2)
-                : Math.Round((Math.Round(12 * (width - 1 / 256), 0) - Math.Round(5 * width, 0)) / 12, 2);
-
-            // How far off? (will be less than 1)
-            var errorAmt = width - z;
-
-            // Calculate what amount to tack onto the original amount to result in the closest possible setting.
-            var adj = width >= 1 + 2 / 3
-                ? Math.Round(7 * errorAmt - 7 / 256, 0) / 7
-                : Math.Round(12 * errorAmt - 12 / 256, 0) / 12 + (2 / 12);
-
-            // Set width to a scaled-value that should result in the nearest possible value to the true desired setting.
-            if (z > 0)
-            {
-                column.Width = width + adj;
-                return;
-            }
-            column.Width = 0d;
-        }
-
         #endregion
 
         #region Row
@@ -523,6 +850,23 @@ namespace ExcelTrans
         #endregion
 
         #region Parse/Apply
+
+        // SYSTEM
+
+        static T ToStaticEnum<T>(string name, T defaultValue = default) =>
+            string.IsNullOrEmpty(name) ? defaultValue :
+            (T)typeof(T).GetProperty(name, BindingFlags.Public | BindingFlags.Static)?.GetValue(null);
+        static Color ParseColor(string name, Color defaultValue = default) =>
+            string.IsNullOrEmpty(name) ? defaultValue :
+            name.StartsWith("#") ? ColorTranslator.FromHtml(name) :
+            ToStaticEnum<Color>(name);
+        //static T ToEnum<T>(string name, T defaultValue = default) => !string.IsNullOrEmpty(name) ? (T)Enum.Parse(typeof(T), name) : defaultValue;
+        static T ToEnum<T>(JsonElement name, T defaultValue = default)
+            => name.ValueKind == JsonValueKind.String && name.GetString() is string z0 && !string.IsNullOrEmpty(z0) ? (T)Enum.Parse(typeof(T), z0)
+            : name.ValueKind == JsonValueKind.Number && name.GetInt32() is int z1 ? (T)(object)z1
+            : defaultValue;
+        static string NumberformatPrec(string prec, string defaultPrec) => string.IsNullOrEmpty(prec) ? defaultPrec : $"0.{new string('0', int.Parse(prec))}";
+        static Image ParseImage(JsonElement t) => null;
 
         // PARSE
 
@@ -646,8 +990,8 @@ namespace ExcelTrans
                 if (style.StartsWith("f:")) excelStyle.Font.Name = style.Substring(2);
                 else if (style.StartsWith("fx")) excelStyle.Font.Size = float.Parse(style.Substring(2));
                 else if (style.StartsWith("ff")) excelStyle.Font.Family = int.Parse(style.Substring(2));
-                else if (style.StartsWith("fc:")) excelStyle.Font.Color.SetColor(ToColor(style.Substring(3)));
-                else if (style.StartsWith("fs:")) excelStyle.Font.Scheme = style.Substring(2);
+                else if (style.StartsWith("fc")) excelStyle.Font.Color.SetColor(ParseColor(style.Substring(2)));
+                else if (style.StartsWith("fs")) excelStyle.Font.Scheme = style.Substring(2);
                 else if (style == "fB") excelStyle.Font.Bold = true;
                 else if (style == "fb") excelStyle.Font.Bold = false;
                 else if (style == "fI") excelStyle.Font.Italic = true;
@@ -665,8 +1009,8 @@ namespace ExcelTrans
                 //if (style.StartsWith("f:")) excelDxfStyle.Font.Name = style.Substring(2);
                 //else if (style.StartsWith("fx")) excelDxfStyle.Font.Size = float.Parse(style.Substring(2));
                 //else if (style.StartsWith("ff")) excelDxfStyle.Font.Family = int.Parse(style.Substring(2));
-                //else if (style.StartsWith("fc:")) excelDxfStyle.Font.Color = ToDxfColor(style.Substring(3));
-                //else if (style.StartsWith("fs:")) excelDxfStyle.Font.Scheme = style.Substring(2);
+                //else if (style.StartsWith("fc")) excelDxfStyle.Font.Color = ToDxfColor(style.Substring(2));
+                //else if (style.StartsWith("fs")) excelDxfStyle.Font.Scheme = style.Substring(2);
                 if (style == "fB") excelDxfStyle.Font.Bold = true;
                 else if (style == "fb") excelDxfStyle.Font.Bold = false;
                 else if (style == "fI") excelDxfStyle.Font.Italic = true;
@@ -682,19 +1026,19 @@ namespace ExcelTrans
             // fill
             else if (style.StartsWith("l") && excelStyle != null)
             {
-                if (style.StartsWith("lc:"))
+                if (style.StartsWith("lc"))
                 {
                     if (excelStyle.Fill.PatternType == ExcelFillStyle.None || excelStyle.Fill.PatternType == ExcelFillStyle.Solid) excelStyle.Fill.PatternType = ExcelFillStyle.Solid;
-                    excelStyle.Fill.BackgroundColor.SetColor(ToColor(style.Substring(3)));
+                    excelStyle.Fill.BackgroundColor.SetColor(ParseColor(style.Substring(2)));
                 }
                 else if (style.StartsWith("lf")) excelStyle.Fill.PatternType = ParseFillStyle(style.Substring(2));
             }
             else if (style.StartsWith("l") && excelDxfStyle != null)
             {
-                if (style.StartsWith("lc:"))
+                if (style.StartsWith("lc"))
                 {
                     if (excelDxfStyle.Fill.PatternType == ExcelFillStyle.None) excelDxfStyle.Fill.PatternType = ExcelFillStyle.Solid;
-                    excelDxfStyle.Fill.BackgroundColor.Color = ToColor(style.Substring(3));
+                    excelDxfStyle.Fill.BackgroundColor.Color = ParseColor(style.Substring(2));
                 }
                 else if (style.StartsWith("lf")) excelDxfStyle.Fill.PatternType = ParseFillStyle(style.Substring(2));
             }

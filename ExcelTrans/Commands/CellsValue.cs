@@ -23,11 +23,8 @@ namespace ExcelTrans.Commands
             : this(ExcelService.GetAddress(r, fromRow, fromCol, toRow, toCol), value, valueKind) { }
         public CellsValue(string cells, object value, CellValueKind valueKind = CellValueKind.Value)
         {
-            if (string.IsNullOrEmpty(cells))
-                throw new ArgumentNullException(nameof(cells));
-
             When = When.Normal;
-            Cells = cells;
+            Cells = cells ?? throw new ArgumentNullException(nameof(cells));
             ValueKind = valueKind;
             ValueType = value?.GetType();
             Value = value?.SerializeValue(ValueType);
