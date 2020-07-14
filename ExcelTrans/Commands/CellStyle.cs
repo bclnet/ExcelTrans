@@ -3,23 +3,23 @@ using System.IO;
 
 namespace ExcelTrans.Commands
 {
-    public struct CellsStyle : IExcelCommand
+    public struct CellStyle : IExcelCommand
     {
         public When When { get; }
         public string Cells { get; private set; }
         public string[] Styles { get; private set; }
 
-        public CellsStyle(int row, int col, params string[] styles)
+        public CellStyle(int row, int col, params string[] styles)
             : this(ExcelService.GetAddress(row, col), styles) { }
-        public CellsStyle(int fromRow, int fromCol, int toRow, int toCol, params string[] styles)
+        public CellStyle(int fromRow, int fromCol, int toRow, int toCol, params string[] styles)
             : this(ExcelService.GetAddress(fromRow, fromCol, toRow, toCol), styles) { }
-        public CellsStyle(Address r, params string[] styles)
+        public CellStyle(Address r, params string[] styles)
             : this(ExcelService.GetAddress(r, 0, 0), styles) { }
-        public CellsStyle(Address r, int row, int col, params string[] styles)
+        public CellStyle(Address r, int row, int col, params string[] styles)
             : this(ExcelService.GetAddress(r, row, col), styles) { }
-        public CellsStyle(Address r, int fromRow, int fromCol, int toRow, int toCol, params string[] styles)
+        public CellStyle(Address r, int fromRow, int fromCol, int toRow, int toCol, params string[] styles)
             : this(ExcelService.GetAddress(r, fromRow, fromCol, toRow, toCol), styles) { }
-        public CellsStyle(string cells, params string[] styles)
+        public CellStyle(string cells, params string[] styles)
         {
             When = When.Normal;
             Cells = cells ?? throw new ArgumentNullException(nameof(cells));
@@ -42,8 +42,8 @@ namespace ExcelTrans.Commands
                 w.Write(Styles[i]);
         }
 
-        void IExcelCommand.Execute(IExcelContext ctx, ref Action after) => ctx.CellsStyle(Cells, Styles);
+        void IExcelCommand.Execute(IExcelContext ctx, ref Action after) => ctx.CellStyle(Cells, Styles);
 
-        void IExcelCommand.Describe(StringWriter w, int pad) { w.WriteLine($"{new string(' ', pad)}CellsStyle[{ExcelService.DescribeAddress(Cells)}]: {string.Join(", ", Styles)}"); }
+        void IExcelCommand.Describe(StringWriter w, int pad) { w.WriteLine($"{new string(' ', pad)}CellStyle[{ExcelService.DescribeAddress(Cells)}]: {string.Join(", ", Styles)}"); }
     }
 }

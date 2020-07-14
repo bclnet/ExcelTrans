@@ -10,25 +10,31 @@ namespace ExcelTrans.Commands
     public class PushSet<T> : IExcelCommand, IExcelSet
     {
         public When When { get; }
-        public int Headers { get; private set; }
+        public int TakeY { get; private set; }
+        public int SkipX { get; private set; }
+        public int SkipY { get; private set; }
         public Func<IExcelContext, IEnumerable<Collection<string>>, IEnumerable<IGrouping<T, Collection<string>>>> Group { get; private set; }
         public Func<IExcelContext, object, IExcelCommand[]> Cmds { get; private set; }
         List<Collection<string>> _set;
 
-        public PushSet(Func<IExcelContext, IEnumerable<Collection<string>>, IEnumerable<IGrouping<T, Collection<string>>>> group, int headers = 1, Func<IExcelContext, IGrouping<T, Collection<string>>, IExcelCommand[]> cmds = null)
+        public PushSet(Func<IExcelContext, IEnumerable<Collection<string>>, IEnumerable<IGrouping<T, Collection<string>>>> group, int takeY = 1, int skipX = 0, int skipY = 0, Func<IExcelContext, IGrouping<T, Collection<string>>, IExcelCommand[]> cmds = null)
         {
             if (cmds == null)
                 throw new ArgumentNullException(nameof(cmds));
 
             When = When.Normal;
-            Headers = headers;
+            TakeY = takeY;
+            SkipX = skipX;
+            SkipY = skipY;
             Group = group;
             Cmds = (z, x) => cmds(z, (IGrouping<T, Collection<string>>)x);
         }
 
         void IExcelCommand.Read(BinaryReader r)
         {
-            Headers = r.ReadByte();
+            TakeY = r.ReadInt32();
+            SkipX = r.ReadInt32();
+            SkipY = r.ReadInt32();
             Group = ExcelSerDes.DecodeFunc<IExcelContext, IEnumerable<Collection<string>>, IEnumerable<IGrouping<T, Collection<string>>>>(r);
             Cmds = ExcelSerDes.DecodeFunc<IExcelContext, object, IExcelCommand[]>(r);
             _set = new List<Collection<string>>();
@@ -36,7 +42,9 @@ namespace ExcelTrans.Commands
 
         void IExcelCommand.Write(BinaryWriter w)
         {
-            w.Write((byte)Headers);
+            w.Write(TakeY);
+            w.Write(SkipX);
+            w.Write(SkipY);
             ExcelSerDes.EncodeFunc(w, Group);
             ExcelSerDes.EncodeFunc(w, Cmds);
         }
@@ -45,7 +53,7 @@ namespace ExcelTrans.Commands
 
         void IExcelCommand.Describe(StringWriter w, int pad)
         {
-            w.WriteLine($"{new string(' ', pad)}PushSet{(Headers == 1 ? null : $"[{Headers}]")}: {(Group != null ? "[group func]" : null)}");
+            w.WriteLine($"{new string(' ', pad)}PushSet{(TakeY <= 1 ? null : $"[{TakeY}]")}: {(Group != null ? "[group func]" : null)}");
             if (Group != null)
             {
                 var fakeCtx = new ExcelContext();
@@ -61,23 +69,23 @@ namespace ExcelTrans.Commands
         void IExcelSet.Execute(IExcelContext ctx)
         {
             ctx.WriteRowFirstSet(null);
-            var headers = _set.Take(Headers).ToArray();
+            var takeY = _set.Take(TakeY).ToArray();
             if (Group != null)
-                foreach (var g in Group(ctx, _set.Skip(Headers)))
+                foreach (var g in Group(ctx, _set.Skip(TakeY + SkipY)))
                 {
                     ctx.WriteRowFirst(null);
                     var frame = ctx.ExecuteCmd(Cmds(ctx, g), out var action);
                     ctx.CsvY = 0;
-                    foreach (var v in headers)
+                    foreach (var v in takeY)
                     {
                         ctx.CsvY--;
-                        ctx.WriteRow(v);
+                        ctx.WriteRow(v, SkipX);
                     }
                     ctx.CsvY = 0;
                     foreach (var v in g)
                     {
                         ctx.AdvanceRow();
-                        ctx.WriteRow(v);
+                        ctx.WriteRow(v, SkipX);
                     }
                     action?.Invoke();
                     ctx.WriteRowLast(null);

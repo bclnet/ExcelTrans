@@ -11,7 +11,7 @@ namespace ExcelTrans.Utils
     {
         public static readonly List<object> funcs = new List<object>();
         public static readonly List<Type> cmds = new List<Type>() {
-            typeof(CellsStyle), typeof(CellsValidation), typeof(CellsValue),
+            typeof(CellStyle), typeof(CellValidation), typeof(CellValue),
             typeof(ColumnValue),
             typeof(Command), typeof(CommandCol), typeof(CommandRow),
             typeof(ConditionalFormatting),
@@ -23,7 +23,7 @@ namespace ExcelTrans.Utils
             typeof(VbaCodeModule), typeof(VbaModule), typeof(VbaReference),
             typeof(ViewAction),
             typeof(WorkbookName), typeof(WorkbookOpen), typeof(WorkbookProtection),
-            typeof(WorksheetsAdd), typeof(WorksheetsCopy), typeof(WorksheetsDelete), typeof(WorksheetsOpen) };
+            typeof(WorksheetAdd), typeof(WorksheetCopy), typeof(WorksheetDelete), typeof(WorksheetGet), typeof(WorksheetMove) };
 
         public static string Encode(params IExcelCommand[] cmds)
         {

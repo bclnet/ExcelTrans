@@ -3,7 +3,7 @@ using System.IO;
 
 namespace ExcelTrans.Commands
 {
-    public struct CellsValue : IExcelCommand
+    public struct CellValue : IExcelCommand
     {
         public When When { get; }
         public string Cells { get; private set; }
@@ -11,17 +11,17 @@ namespace ExcelTrans.Commands
         public CellValueKind ValueKind { get; private set; }
         public Type ValueType { get; set; }
 
-        public CellsValue(int row, int col, object value, CellValueKind valueKind = CellValueKind.Value)
+        public CellValue(int row, int col, object value, CellValueKind valueKind = CellValueKind.Value)
             : this(ExcelService.GetAddress(row, col), value, valueKind) { }
-        public CellsValue(int fromRow, int fromCol, int toRow, int toCol, object value, CellValueKind valueKind = CellValueKind.Value)
+        public CellValue(int fromRow, int fromCol, int toRow, int toCol, object value, CellValueKind valueKind = CellValueKind.Value)
             : this(ExcelService.GetAddress(fromRow, fromCol, toRow, toCol), value, valueKind) { }
-        public CellsValue(Address r, object value, CellValueKind valueKind = CellValueKind.Value)
+        public CellValue(Address r, object value, CellValueKind valueKind = CellValueKind.Value)
             : this(ExcelService.GetAddress(r, 0, 0), value, valueKind) { }
-        public CellsValue(Address r, int row, int col, object value, CellValueKind valueKind = CellValueKind.Value)
+        public CellValue(Address r, int row, int col, object value, CellValueKind valueKind = CellValueKind.Value)
             : this(ExcelService.GetAddress(r, row, col), value, valueKind) { }
-        public CellsValue(Address r, int fromRow, int fromCol, int toRow, int toCol, object value, CellValueKind valueKind = CellValueKind.Value)
+        public CellValue(Address r, int fromRow, int fromCol, int toRow, int toCol, object value, CellValueKind valueKind = CellValueKind.Value)
             : this(ExcelService.GetAddress(r, fromRow, fromCol, toRow, toCol), value, valueKind) { }
-        public CellsValue(string cells, object value, CellValueKind valueKind = CellValueKind.Value)
+        public CellValue(string cells, object value, CellValueKind valueKind = CellValueKind.Value)
         {
             When = When.Normal;
             Cells = cells ?? throw new ArgumentNullException(nameof(cells));
@@ -46,8 +46,8 @@ namespace ExcelTrans.Commands
             w.Write(ValueType != null); if (ValueType != null) w.Write(ValueType.ToString());
         }
 
-        void IExcelCommand.Execute(IExcelContext ctx, ref Action after) => ctx.CellsValue(Cells, Value?.DeserializeValue(ValueType), ValueKind);
+        void IExcelCommand.Execute(IExcelContext ctx, ref Action after) => ctx.CellValue(Cells, Value?.DeserializeValue(ValueType), ValueKind);
 
-        void IExcelCommand.Describe(StringWriter w, int pad) { w.WriteLine($"{new string(' ', pad)}CellsValue[{ExcelService.DescribeAddress(Cells)}]: {Value}{(ValueKind == CellValueKind.Value ? null : $" - {ValueKind}")}"); }
+        void IExcelCommand.Describe(StringWriter w, int pad) { w.WriteLine($"{new string(' ', pad)}CellValue[{ExcelService.DescribeAddress(Cells)}]: {Value}{(ValueKind == CellValueKind.Value ? null : $" - {ValueKind}")}"); }
     }
 }

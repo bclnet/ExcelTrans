@@ -88,7 +88,7 @@ namespace ExcelTrans
         public static void WriteRowFirst(this IExcelContext ctx, Collection<string> s) => ctx.ExecuteRow(When.First, s, out var after);
 
         public static void AdvanceRow(this IExcelContext ctx) => ctx.CsvY++;
-        public static void WriteRow(this IExcelContext ctx, Collection<string> s)
+        public static void WriteRow(this IExcelContext ctx, Collection<string> s, int startIndex = 0)
         {
             var ws = ((ExcelContext)ctx).EnsureWorksheet();
             // execute-row-before
@@ -97,7 +97,7 @@ namespace ExcelTrans
                 return;
             //
             ctx.X = ctx.XStart;
-            for (var i = 0; i < s.Count; i++)
+            for (var i = startIndex; i < s.Count; i++)
             {
                 ctx.CsvX = i + 1;
                 var v = s[i].ParseValue();
@@ -125,10 +125,12 @@ namespace ExcelTrans
 
         #endregion
 
-        #region VBA
+        #region Vba
 
         public static void VbaCodeModule(this IExcelContext ctx, string name, VbaCode code, VbaModuleKind moduleKind)
         {
+            //if (!string.IsNullOrEmpty(name) && char.IsDigit(name[0]))
+            //    name = $"{name}";
             var v = ((ExcelContext)ctx).EnsureVba();
             ExcelVBAModule m;
             switch (moduleKind)
@@ -148,6 +150,8 @@ namespace ExcelTrans
 
         public static void VbaModule(this IExcelContext ctx, string name, VbaCode code)
         {
+            //if (!string.IsNullOrEmpty(name) && char.IsDigit(name[0]))
+            //    name = $"{name}";
             var v = ((ExcelContext)ctx).EnsureVba();
             var m = v.Modules[name] ?? v.Modules.AddModule(name);
             if (!string.IsNullOrEmpty(code.Name)) m.Name = code.Name;
@@ -214,6 +218,49 @@ namespace ExcelTrans
         #endregion
 
         #region Worksheet
+
+        public static void WorksheetAdd(this IExcelContext ctx, string name)
+        {
+            ctx.Flush();
+            var ctx2 = (ExcelContext)ctx;
+            ctx2.WS = ctx2.WB.Worksheets.Add(name);
+            ctx.DeltaX = ctx.DeltaY = ctx.XStart = ctx.Y = 1;
+        }
+
+        public static void WorksheetCopy(this IExcelContext ctx, string name, string newName)
+        {
+            ctx.Flush();
+            var ctx2 = (ExcelContext)ctx;
+            ctx2.WS = ctx2.WB.Worksheets.Copy(name, newName);
+            ctx.DeltaX = ctx.DeltaY = ctx.XStart = ctx.Y = 1;
+        }
+
+        public static void WorksheetDelete(this IExcelContext ctx, string name)
+        {
+            var ctx2 = (ExcelContext)ctx;
+            ctx2.WB.Worksheets.Delete(name);
+        }
+
+        public static void WorksheetGet(this IExcelContext ctx, string name)
+        {
+            ctx.Flush();
+            var ctx2 = (ExcelContext)ctx;
+            var worksheets = ctx2.WB.Worksheets;
+            ctx2.WS = worksheets[name] ?? worksheets.Add(name);
+            ctx.DeltaX = ctx.DeltaY = ctx.XStart = ctx.Y = 1;
+        }
+
+        public static void WorksheetMove(this IExcelContext ctx, string name, string targetName)
+        {
+            ctx.Flush();
+            var ctx2 = (ExcelContext)ctx;
+            var worksheets = ctx2.WB.Worksheets;
+            if (targetName == "<") worksheets.MoveToStart(name);
+            else if (targetName == ">") worksheets.MoveToEnd(name);
+            else if (targetName.StartsWith("<")) worksheets.MoveBefore(name, targetName.Substring(1));
+            else if (targetName.StartsWith(">")) worksheets.MoveAfter(name, targetName.Substring(1));
+            else worksheets.MoveAfter(name, targetName);
+        }
 
         // https://www.c-sharpcorner.com/blogs/how-to-adding-pictures-or-images-in-excel-sheet-using-epplus-net-application-c-sharp-part-five
         public static void Drawing(this IExcelContext ctx, string address, string name, object value, DrawingKind drawingKind)
@@ -648,26 +695,26 @@ namespace ExcelTrans
 
         #endregion
 
-        #region Cells
+        #region Cell
 
-        public static void CellsStyle(this IExcelContext ctx, int row, int col, params string[] styles) => CellsStyle(ctx, ExcelService.GetAddress(row, col), styles);
-        public static void CellsStyle(this IExcelContext ctx, int fromRow, int fromCol, int toRow, int toCol, params string[] styles) => CellsStyle(ctx, ExcelService.GetAddress(fromRow, fromCol, toRow, toCol), styles);
-        public static void CellsStyle(this IExcelContext ctx, Address r, params string[] styles) => CellsStyle(ctx, ExcelService.GetAddress(r, 0, 0), styles);
-        public static void CellsStyle(this IExcelContext ctx, Address r, int row, int col, params string[] styles) => CellsStyle(ctx, ExcelService.GetAddress(r, row, col), styles);
-        public static void CellsStyle(this IExcelContext ctx, Address r, int fromRow, int fromCol, int toRow, int toCol, params string[] styles) => CellsStyle(ctx, ExcelService.GetAddress(r, fromRow, fromCol, toRow, toCol), styles);
-        public static void CellsStyle(this IExcelContext ctx, string cells, string[] styles)
+        public static void CellStyle(this IExcelContext ctx, int row, int col, params string[] styles) => CellStyle(ctx, ExcelService.GetAddress(row, col), styles);
+        public static void CellStyle(this IExcelContext ctx, int fromRow, int fromCol, int toRow, int toCol, params string[] styles) => CellStyle(ctx, ExcelService.GetAddress(fromRow, fromCol, toRow, toCol), styles);
+        public static void CellStyle(this IExcelContext ctx, Address r, params string[] styles) => CellStyle(ctx, ExcelService.GetAddress(r, 0, 0), styles);
+        public static void CellStyle(this IExcelContext ctx, Address r, int row, int col, params string[] styles) => CellStyle(ctx, ExcelService.GetAddress(r, row, col), styles);
+        public static void CellStyle(this IExcelContext ctx, Address r, int fromRow, int fromCol, int toRow, int toCol, params string[] styles) => CellStyle(ctx, ExcelService.GetAddress(r, fromRow, fromCol, toRow, toCol), styles);
+        public static void CellStyle(this IExcelContext ctx, string cells, string[] styles)
         {
             var range = ctx.Get(cells);
             foreach (var style in styles)
                 ApplyCellStyle(style, range.Style, null);
         }
 
-        public static void CellsValidation(this IExcelContext ctx, DataValidationKind validationKind, int row, int col, params string[] rules) => CellsValidation(ctx, validationKind, ExcelService.GetAddress(row, col), rules);
-        public static void CellsValidation(this IExcelContext ctx, DataValidationKind validationKind, int fromRow, int fromCol, int toRow, int toCol, params string[] rules) => CellsValidation(ctx, validationKind, ExcelService.GetAddress(fromRow, fromCol, toRow, toCol), rules);
-        public static void CellsValidation(this IExcelContext ctx, DataValidationKind validationKind, Address r, params string[] rules) => CellsValidation(ctx, validationKind, ExcelService.GetAddress(r, 0, 0), rules);
-        public static void CellsValidation(this IExcelContext ctx, DataValidationKind validationKind, Address r, int row, int col, params string[] rules) => CellsValidation(ctx, validationKind, ExcelService.GetAddress(r, row, col), rules);
-        public static void CellsValidation(this IExcelContext ctx, DataValidationKind validationKind, Address r, int fromRow, int fromCol, int toRow, int toCol, params string[] rules) => CellsValidation(ctx, validationKind, ExcelService.GetAddress(r, fromRow, fromCol, toRow, toCol), rules);
-        public static void CellsValidation(this IExcelContext ctx, DataValidationKind validationKind, string cells, string[] rules)
+        public static void CellValidation(this IExcelContext ctx, DataValidationKind validationKind, int row, int col, params string[] rules) => CellValidation(ctx, validationKind, ExcelService.GetAddress(row, col), rules);
+        public static void CellValidation(this IExcelContext ctx, DataValidationKind validationKind, int fromRow, int fromCol, int toRow, int toCol, params string[] rules) => CellValidation(ctx, validationKind, ExcelService.GetAddress(fromRow, fromCol, toRow, toCol), rules);
+        public static void CellValidation(this IExcelContext ctx, DataValidationKind validationKind, Address r, params string[] rules) => CellValidation(ctx, validationKind, ExcelService.GetAddress(r, 0, 0), rules);
+        public static void CellValidation(this IExcelContext ctx, DataValidationKind validationKind, Address r, int row, int col, params string[] rules) => CellValidation(ctx, validationKind, ExcelService.GetAddress(r, row, col), rules);
+        public static void CellValidation(this IExcelContext ctx, DataValidationKind validationKind, Address r, int fromRow, int fromCol, int toRow, int toCol, params string[] rules) => CellValidation(ctx, validationKind, ExcelService.GetAddress(r, fromRow, fromCol, toRow, toCol), rules);
+        public static void CellValidation(this IExcelContext ctx, DataValidationKind validationKind, string cells, string[] rules)
         {
             var validations = ((ExcelContext)ctx).WS.DataValidations;
             IExcelDataValidation validation;
@@ -688,12 +735,12 @@ namespace ExcelTrans
                 ApplyCellValidation(rule, validation);
         }
 
-        public static void CellsValue(this IExcelContext ctx, int row, int col, object value, CellValueKind valueKind = CellValueKind.Value) => ctx.CellsValue(ExcelService.GetAddress(row, col), value, valueKind);
-        public static void CellsValue(this IExcelContext ctx, int fromRow, int fromCol, int toRow, int toCol, object value, CellValueKind valueKind = CellValueKind.Value) => ctx.CellsValue(ExcelService.GetAddress(fromRow, fromCol, toRow, toCol), value, valueKind);
-        public static void CellsValue(this IExcelContext ctx, Address r, object value, CellValueKind valueKind = CellValueKind.Value) => ctx.CellsValue(ExcelService.GetAddress(r, 0, 0), value, valueKind);
-        public static void CellsValue(this IExcelContext ctx, Address r, int row, int col, object value, CellValueKind valueKind = CellValueKind.Value) => ctx.CellsValue(ExcelService.GetAddress(r, row, col), value, valueKind);
-        public static void CellsValue(this IExcelContext ctx, Address r, int fromRow, int fromCol, int toRow, int toCol, object value, CellValueKind valueKind = CellValueKind.Value) => ctx.CellsValue(ExcelService.GetAddress(r, fromRow, fromCol, toRow, toCol), value, valueKind);
-        public static void CellsValue(this IExcelContext ctx, string cells, object value, CellValueKind valueKind = CellValueKind.Value)
+        public static void CellValue(this IExcelContext ctx, int row, int col, object value, CellValueKind valueKind = CellValueKind.Value) => ctx.CellValue(ExcelService.GetAddress(row, col), value, valueKind);
+        public static void CellValue(this IExcelContext ctx, int fromRow, int fromCol, int toRow, int toCol, object value, CellValueKind valueKind = CellValueKind.Value) => ctx.CellValue(ExcelService.GetAddress(fromRow, fromCol, toRow, toCol), value, valueKind);
+        public static void CellValue(this IExcelContext ctx, Address r, object value, CellValueKind valueKind = CellValueKind.Value) => ctx.CellValue(ExcelService.GetAddress(r, 0, 0), value, valueKind);
+        public static void CellValue(this IExcelContext ctx, Address r, int row, int col, object value, CellValueKind valueKind = CellValueKind.Value) => ctx.CellValue(ExcelService.GetAddress(r, row, col), value, valueKind);
+        public static void CellValue(this IExcelContext ctx, Address r, int fromRow, int fromCol, int toRow, int toCol, object value, CellValueKind valueKind = CellValueKind.Value) => ctx.CellValue(ExcelService.GetAddress(r, fromRow, fromCol, toRow, toCol), value, valueKind);
+        public static void CellValue(this IExcelContext ctx, string cells, object value, CellValueKind valueKind = CellValueKind.Value)
         {
             var range = ctx.Get(cells);
             var values = value == null || !(value is Array array) ? new[] { value } : array;
@@ -725,12 +772,12 @@ namespace ExcelTrans
             }
         }
 
-        public static object GetCellsValue(this IExcelContext ctx, int row, int col, CellValueKind valueKind = CellValueKind.Value) => ctx.GetCellsValue(ExcelService.GetAddress(row, col), valueKind);
-        public static object GetCellsValue(this IExcelContext ctx, int fromRow, int fromCol, int toRow, int toCol, CellValueKind valueKind = CellValueKind.Value) => ctx.GetCellsValue(ExcelService.GetAddress(fromRow, fromCol, toRow, toCol), valueKind);
-        public static object GetCellsValue(this IExcelContext ctx, Address r, CellValueKind valueKind = CellValueKind.Value) => ctx.GetCellsValue(ExcelService.GetAddress(r, 0, 0), valueKind);
-        public static object GetCellsValue(this IExcelContext ctx, Address r, int row, int col, CellValueKind valueKind = CellValueKind.Value) => ctx.GetCellsValue(ExcelService.GetAddress(r, row, col), valueKind);
-        public static object GetCellsValue(this IExcelContext ctx, Address r, int fromRow, int fromCol, int toRow, int toCol, CellValueKind valueKind = CellValueKind.Value) => ctx.GetCellsValue(ExcelService.GetAddress(r, fromRow, fromCol, toRow, toCol), valueKind);
-        public static object GetCellsValue(this IExcelContext ctx, string cells, CellValueKind valueKind = CellValueKind.Value)
+        public static object GetCellValue(this IExcelContext ctx, int row, int col, CellValueKind valueKind = CellValueKind.Value) => ctx.GetCellValue(ExcelService.GetAddress(row, col), valueKind);
+        public static object GetCellValue(this IExcelContext ctx, int fromRow, int fromCol, int toRow, int toCol, CellValueKind valueKind = CellValueKind.Value) => ctx.GetCellValue(ExcelService.GetAddress(fromRow, fromCol, toRow, toCol), valueKind);
+        public static object GetCellValue(this IExcelContext ctx, Address r, CellValueKind valueKind = CellValueKind.Value) => ctx.GetCellValue(ExcelService.GetAddress(r, 0, 0), valueKind);
+        public static object GetCellValue(this IExcelContext ctx, Address r, int row, int col, CellValueKind valueKind = CellValueKind.Value) => ctx.GetCellValue(ExcelService.GetAddress(r, row, col), valueKind);
+        public static object GetCellValue(this IExcelContext ctx, Address r, int fromRow, int fromCol, int toRow, int toCol, CellValueKind valueKind = CellValueKind.Value) => ctx.GetCellValue(ExcelService.GetAddress(r, fromRow, fromCol, toRow, toCol), valueKind);
+        public static object GetCellValue(this IExcelContext ctx, string cells, CellValueKind valueKind = CellValueKind.Value)
         {
             var range = ctx.Get(cells);
             switch (valueKind)
