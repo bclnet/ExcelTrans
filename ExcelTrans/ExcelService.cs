@@ -1,44 +1,83 @@
 ﻿using ExcelTrans.Commands;
 using ExcelTrans.Services;
 using ExcelTrans.Utils;
-using NPOI.SS.Formula.Functions;
 using OfficeOpenXml;
 using System;
 using System.Collections.Generic;
-using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
 
 namespace ExcelTrans
 {
-    public interface IExcelCommand
-    {
-        When When { get; }
-        void Read(BinaryReader r);
-        void Write(BinaryWriter w);
-        void Execute(IExcelContext ctx, ref Action after);
-        void Describe(StringWriter w, int pad);
-    }
-
-    public interface IExcelSet
-    {
-        void Add(Collection<string> s);
-        void Execute(IExcelContext ctx);
-    }
-
+    /// <summary>
+    /// ExcelService
+    /// </summary>
     public static class ExcelService
     {
+        /// <summary>
+        /// The comment
+        /// </summary>
         public static readonly string Comment = "^q|";
+        /// <summary>
+        /// The stream
+        /// </summary>
         public static readonly string Stream = "^q=";
+        /// <summary>
+        /// The break
+        /// </summary>
         public static readonly string Break = "^q!";
+        /// <summary>
+        /// Gets the pop frame.
+        /// </summary>
+        /// <value>
+        /// The pop frame.
+        /// </value>
         public static string PopFrame => $"{Stream}{ExcelSerDes.Encode(new PopFrame())}";
+        /// <summary>
+        /// Gets the pop set.
+        /// </summary>
+        /// <value>
+        /// The pop set.
+        /// </value>
         public static string PopSet => $"{Stream}{ExcelSerDes.Encode(new PopSet())}";
+        /// <summary>
+        /// Encodes the specified describe.
+        /// </summary>
+        /// <param name="describe">if set to <c>true</c> [describe].</param>
+        /// <param name="cmds">The CMDS.</param>
+        /// <returns></returns>
         public static string Encode(bool describe, params IExcelCommand[] cmds) => $"{(describe ? ExcelSerDes.Describe(Comment, cmds) : null)}{Stream}{ExcelSerDes.Encode(cmds)}";
+        /// <summary>
+        /// Encodes the specified describe.
+        /// </summary>
+        /// <param name="describe">if set to <c>true</c> [describe].</param>
+        /// <param name="cmds">The CMDS.</param>
+        /// <returns></returns>
         public static string Encode(bool describe, IEnumerable<IExcelCommand> cmds) => Encode(describe, cmds.ToArray());
+        /// <summary>
+        /// Encodes the specified CMDS.
+        /// </summary>
+        /// <param name="cmds">The CMDS.</param>
+        /// <returns></returns>
         public static string Encode(params IExcelCommand[] cmds) => $"{Stream}{ExcelSerDes.Encode(cmds)}";
+        /// <summary>
+        /// Encodes the specified CMDS.
+        /// </summary>
+        /// <param name="cmds">The CMDS.</param>
+        /// <returns></returns>
         public static string Encode(IEnumerable<IExcelCommand> cmds) => Encode(cmds.ToArray());
+        /// <summary>
+        /// Decodes the specified packed.
+        /// </summary>
+        /// <param name="packed">The packed.</param>
+        /// <returns></returns>
         public static IExcelCommand[] Decode(string packed) => ExcelSerDes.Decode(packed.Substring(Stream.Length));
 
+        /// <summary>
+        /// Transforms the specified value.
+        /// </summary>
+        /// <param name="value">The value.</param>
+        /// <returns></returns>
         public static (Stream stream, string, string path) Transform((Stream stream, string, string path) value)
         {
             using (var s1 = value.stream)
@@ -74,34 +113,225 @@ namespace ExcelTrans
             }
         }
 
+        /// <summary>
+        /// Gets the address col.
+        /// </summary>
+        /// <param name="column">The column.</param>
+        /// <returns></returns>
         public static string GetAddressCol(int column) => ExcelCellBase.GetAddressCol(column);
+        /// <summary>
+        /// Gets the address row.
+        /// </summary>
+        /// <param name="row">The row.</param>
+        /// <returns></returns>
         public static string GetAddressRow(int row) => ExcelCellBase.GetAddressRow(row);
+        /// <summary>
+        /// Gets the address.
+        /// </summary>
+        /// <param name="row">The row.</param>
+        /// <param name="column">The column.</param>
+        /// <returns></returns>
         public static string GetAddress(int row, string column) => ExcelCellBase.GetAddress(row, ColToInt(column));
+        /// <summary>
+        /// Gets the address.
+        /// </summary>
+        /// <param name="row">The row.</param>
+        /// <param name="column">The column.</param>
+        /// <returns></returns>
         public static string GetAddress(int row, int column) => ExcelCellBase.GetAddress(row, column);
+        /// <summary>
+        /// Gets the address.
+        /// </summary>
+        /// <param name="row">The row.</param>
+        /// <param name="absoluteRow">if set to <c>true</c> [absolute row].</param>
+        /// <param name="column">The column.</param>
+        /// <param name="absoluteCol">if set to <c>true</c> [absolute col].</param>
+        /// <returns></returns>
         public static string GetAddress(int row, bool absoluteRow, string column, bool absoluteCol) => ExcelCellBase.GetAddress(row, absoluteRow, ColToInt(column), absoluteCol);
+        /// <summary>
+        /// Gets the address.
+        /// </summary>
+        /// <param name="row">The row.</param>
+        /// <param name="absoluteRow">if set to <c>true</c> [absolute row].</param>
+        /// <param name="column">The column.</param>
+        /// <param name="absoluteCol">if set to <c>true</c> [absolute col].</param>
+        /// <returns></returns>
         public static string GetAddress(int row, bool absoluteRow, int column, bool absoluteCol) => ExcelCellBase.GetAddress(row, absoluteRow, column, absoluteCol);
+        /// <summary>
+        /// Gets the address.
+        /// </summary>
+        /// <param name="row">The row.</param>
+        /// <param name="column">The column.</param>
+        /// <param name="absolute">if set to <c>true</c> [absolute].</param>
+        /// <returns></returns>
         public static string GetAddress(int row, string column, bool absolute) => ExcelCellBase.GetAddress(row, ColToInt(column), absolute);
+        /// <summary>
+        /// Gets the address.
+        /// </summary>
+        /// <param name="row">The row.</param>
+        /// <param name="column">The column.</param>
+        /// <param name="absolute">if set to <c>true</c> [absolute].</param>
+        /// <returns></returns>
         public static string GetAddress(int row, int column, bool absolute) => ExcelCellBase.GetAddress(row, column, absolute);
+        /// <summary>
+        /// Gets the address.
+        /// </summary>
+        /// <param name="fromRow">From row.</param>
+        /// <param name="fromColumn">From column.</param>
+        /// <param name="toRow">To row.</param>
+        /// <param name="toColumn">To column.</param>
+        /// <returns></returns>
         public static string GetAddress(int fromRow, string fromColumn, int toRow, string toColumn) => ExcelCellBase.GetAddress(fromRow, ColToInt(fromColumn), toRow, ColToInt(toColumn));
+        /// <summary>
+        /// Gets the address.
+        /// </summary>
+        /// <param name="fromRow">From row.</param>
+        /// <param name="fromColumn">From column.</param>
+        /// <param name="toRow">To row.</param>
+        /// <param name="toColumn">To column.</param>
+        /// <returns></returns>
         public static string GetAddress(int fromRow, int fromColumn, int toRow, int toColumn) => ExcelCellBase.GetAddress(fromRow, fromColumn, toRow, toColumn);
+        /// <summary>
+        /// Gets the address.
+        /// </summary>
+        /// <param name="fromRow">From row.</param>
+        /// <param name="fromColumn">From column.</param>
+        /// <param name="toRow">To row.</param>
+        /// <param name="toColumn">To column.</param>
+        /// <param name="absolute">if set to <c>true</c> [absolute].</param>
+        /// <returns></returns>
         public static string GetAddress(int fromRow, string fromColumn, int toRow, string toColumn, bool absolute) => ExcelCellBase.GetAddress(fromRow, ColToInt(fromColumn), toRow, ColToInt(toColumn), absolute);
+        /// <summary>
+        /// Gets the address.
+        /// </summary>
+        /// <param name="fromRow">From row.</param>
+        /// <param name="fromColumn">From column.</param>
+        /// <param name="toRow">To row.</param>
+        /// <param name="toColumn">To column.</param>
+        /// <param name="absolute">if set to <c>true</c> [absolute].</param>
+        /// <returns></returns>
         public static string GetAddress(int fromRow, int fromColumn, int toRow, int toColumn, bool absolute) => ExcelCellBase.GetAddress(fromRow, fromColumn, toRow, toColumn, absolute);
+        /// <summary>
+        /// Gets the address.
+        /// </summary>
+        /// <param name="fromRow">From row.</param>
+        /// <param name="fromColumn">From column.</param>
+        /// <param name="toRow">To row.</param>
+        /// <param name="toColumn">To column.</param>
+        /// <param name="fixedFromRow">if set to <c>true</c> [fixed from row].</param>
+        /// <param name="fixedFromColumn">if set to <c>true</c> [fixed from column].</param>
+        /// <param name="fixedToRow">if set to <c>true</c> [fixed to row].</param>
+        /// <param name="fixedToColumn">if set to <c>true</c> [fixed to column].</param>
+        /// <returns></returns>
         public static string GetAddress(int fromRow, string fromColumn, int toRow, string toColumn, bool fixedFromRow, bool fixedFromColumn, bool fixedToRow, bool fixedToColumn) => ExcelCellBase.GetAddress(fromRow, ColToInt(fromColumn), toRow, ColToInt(toColumn), fixedFromRow, fixedFromColumn, fixedToRow, fixedToColumn);
+        /// <summary>
+        /// Gets the address.
+        /// </summary>
+        /// <param name="fromRow">From row.</param>
+        /// <param name="fromColumn">From column.</param>
+        /// <param name="toRow">To row.</param>
+        /// <param name="toColumn">To column.</param>
+        /// <param name="fixedFromRow">if set to <c>true</c> [fixed from row].</param>
+        /// <param name="fixedFromColumn">if set to <c>true</c> [fixed from column].</param>
+        /// <param name="fixedToRow">if set to <c>true</c> [fixed to row].</param>
+        /// <param name="fixedToColumn">if set to <c>true</c> [fixed to column].</param>
+        /// <returns></returns>
         public static string GetAddress(int fromRow, int fromColumn, int toRow, int toColumn, bool fixedFromRow, bool fixedFromColumn, bool fixedToRow, bool fixedToColumn) => ExcelCellBase.GetAddress(fromRow, fromColumn, toRow, toColumn, fixedFromRow, fixedFromColumn, fixedToRow, fixedToColumn);
+        /// <summary>
+        /// Gets the address.
+        /// </summary>
+        /// <param name="r">The r.</param>
+        /// <param name="row">The row.</param>
+        /// <param name="col">The col.</param>
+        /// <returns></returns>
         public static string GetAddress(Address r, int row, string col) => $"^{(int)r}:{row}:{ColToInt(col)}";
+        /// <summary>
+        /// Gets the address.
+        /// </summary>
+        /// <param name="r">The r.</param>
+        /// <param name="row">The row.</param>
+        /// <param name="col">The col.</param>
+        /// <returns></returns>
         public static string GetAddress(Address r, int row, int col) => $"^{(int)r}:{row}:{col}";
+        /// <summary>
+        /// Gets the address.
+        /// </summary>
+        /// <param name="r">The r.</param>
+        /// <param name="fromRow">From row.</param>
+        /// <param name="fromColumn">From column.</param>
+        /// <param name="toRow">To row.</param>
+        /// <param name="toColumn">To column.</param>
+        /// <returns></returns>
         public static string GetAddress(Address r, int fromRow, string fromColumn, int toRow, string toColumn) => $"^{(int)r}:{fromRow}:{ColToInt(fromColumn)}:{toRow}:{ColToInt(toColumn)}";
+        /// <summary>
+        /// Gets the address.
+        /// </summary>
+        /// <param name="r">The r.</param>
+        /// <param name="fromRow">From row.</param>
+        /// <param name="fromColumn">From column.</param>
+        /// <param name="toRow">To row.</param>
+        /// <param name="toColumn">To column.</param>
+        /// <returns></returns>
         public static string GetAddress(Address r, int fromRow, int fromColumn, int toRow, int toColumn) => $"^{(int)r}:{fromRow}:{fromColumn}:{toRow}:{toColumn}";
+        /// <summary>
+        /// Gets the address.
+        /// </summary>
+        /// <param name="ctx">The CTX.</param>
+        /// <param name="r">The r.</param>
+        /// <param name="row">The row.</param>
+        /// <param name="col">The col.</param>
+        /// <returns></returns>
         public static string GetAddress(this IExcelContext ctx, Address r, int row, string col) => DecodeAddress(ctx, GetAddress(r, row, col));
+        /// <summary>
+        /// Gets the address.
+        /// </summary>
+        /// <param name="ctx">The CTX.</param>
+        /// <param name="r">The r.</param>
+        /// <param name="row">The row.</param>
+        /// <param name="col">The col.</param>
+        /// <returns></returns>
         public static string GetAddress(this IExcelContext ctx, Address r, int row, int col) => DecodeAddress(ctx, GetAddress(r, row, col));
+        /// <summary>
+        /// Gets the address.
+        /// </summary>
+        /// <param name="ctx">The CTX.</param>
+        /// <param name="r">The r.</param>
+        /// <param name="fromRow">From row.</param>
+        /// <param name="fromColumn">From column.</param>
+        /// <param name="toRow">To row.</param>
+        /// <param name="toColumn">To column.</param>
+        /// <returns></returns>
         public static string GetAddress(this IExcelContext ctx, Address r, int fromRow, string fromColumn, int toRow, string toColumn) => DecodeAddress(ctx, GetAddress(r, fromRow, fromColumn, toRow, toColumn));
+        /// <summary>
+        /// Gets the address.
+        /// </summary>
+        /// <param name="ctx">The CTX.</param>
+        /// <param name="r">The r.</param>
+        /// <param name="fromRow">From row.</param>
+        /// <param name="fromColumn">From column.</param>
+        /// <param name="toRow">To row.</param>
+        /// <param name="toColumn">To column.</param>
+        /// <returns></returns>
         public static string GetAddress(this IExcelContext ctx, Address r, int fromRow, int fromColumn, int toRow, int toColumn) => DecodeAddress(ctx, GetAddress(r, fromRow, fromColumn, toRow, toColumn));
 
+        /// <summary>
+        /// Decodes the address.
+        /// </summary>
+        /// <param name="ctx">The CTX.</param>
+        /// <param name="address">The address.</param>
+        /// <returns></returns>
+        /// <exception cref="ArgumentOutOfRangeException">
+        /// address
+        /// or
+        /// address
+        /// or
+        /// address
+        /// </exception>
         public static string DecodeAddress(this IExcelContext ctx, string address)
         {
             if (!address.StartsWith("^")) return address;
             var vec = address.Substring(1).Split(':').Select(x => int.Parse(x)).ToArray();
-            var rel = (vec[0] & (int)Address.Rel) == (int)Address.Rel;
+            var rel = (vec[0] & (int)Address.InternalRel) == (int)Address.InternalRel;
             if (vec.Length == 3)
             {
                 int row = rel ? ctx.Y + vec[1] : vec[1],
@@ -137,7 +367,7 @@ namespace ExcelTrans
         {
             if (!address.StartsWith("^")) return address;
             var vec = address.Substring(1).Split(':').Select(x => int.Parse(x)).ToArray();
-            var rel = (vec[0] & (int)Address.Rel) == (int)Address.Rel ? "+" : null;
+            var rel = (vec[0] & (int)Address.InternalRel) == (int)Address.InternalRel ? "+" : null;
             if (vec.Length == 3)
                 switch ((Address)(vec[0] & 0xF))
                 {
@@ -192,6 +422,11 @@ namespace ExcelTrans
 
         #region Measure
 
+        /// <summary>
+        /// Sets the width of the true column.
+        /// </summary>
+        /// <param name="column">The column.</param>
+        /// <param name="width">The width.</param>
         public static void SetTrueColumnWidth(this ExcelColumn column, double width)
         {
             // Deduce what the column width would really get set to.

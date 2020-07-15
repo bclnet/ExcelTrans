@@ -56,7 +56,7 @@ newaction
     trigger     = "pack",
     description = "Package and run all unit tests",
     execute = function ()
-        os.execute "dotnet pack ExcelTrans/ExcelTrans.csproj --output ../nupkgs --include-source"
+        os.execute "dotnet pack ExcelTrans/ExcelTrans.csproj --output nupkgs --include-source"
     end
 }
 

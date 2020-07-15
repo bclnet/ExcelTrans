@@ -3,14 +3,47 @@ using System.IO;
 
 namespace ExcelTrans.Commands
 {
+    /// <summary>
+    /// Applies `.Value` of `.ActionKind` to the active spreadsheet
+    /// </summary>
+    /// <seealso cref="ExcelTrans.IExcelCommand" />
     public struct ViewAction : IExcelCommand
     {
+        /// <summary>
+        /// Gets the when.
+        /// </summary>
+        /// <value>
+        /// The when.
+        /// </value>
         public When When { get; }
+        /// <summary>
+        /// Gets the value.
+        /// </summary>
+        /// <value>
+        /// The value.
+        /// </value>
         public string Value { get; private set; }
+        /// <summary>
+        /// Gets the kind of the action.
+        /// </summary>
+        /// <value>
+        /// The kind of the action.
+        /// </value>
         public ViewActionKind ActionKind { get; private set; }
 
+        /// <summary>
+        /// Initializes a new instance of the <see cref="ViewAction"/> struct.
+        /// </summary>
+        /// <param name="row">The row.</param>
+        /// <param name="col">The col.</param>
+        /// <param name="actionKind">Kind of the action.</param>
         public ViewAction(int row, int col, ViewActionKind actionKind)
             : this(ExcelService.GetAddress(row, col), actionKind) { }
+        /// <summary>
+        /// Initializes a new instance of the <see cref="ViewAction"/> struct.
+        /// </summary>
+        /// <param name="value">The value.</param>
+        /// <param name="actionKind">Kind of the action.</param>
         public ViewAction(string value, ViewActionKind actionKind)
         {
             When = When.Normal;

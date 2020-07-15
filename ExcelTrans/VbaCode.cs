@@ -4,16 +4,65 @@ using System.Reflection;
 
 namespace ExcelTrans
 {
+    /// <summary>
+    /// Values for the VbaCodeModule and VbaModule command
+    /// </summary>
     public class VbaCode
     {
+        /// <summary>
+        /// The name of the module
+        /// </summary>
+        /// <value>
+        /// The name.
+        /// </value>
         public string Name { get; set; }
+        /// <summary>
+        /// A description of the module
+        /// </summary>
+        /// <value>
+        /// The description.
+        /// </value>
         public string Description { get; set; }
+        /// <summary>
+        /// The code without any module level attributes. Can contain function level attributes.
+        /// </summary>
+        /// <value>
+        /// The code.
+        /// </value>
         public string Code { get; set; }
+        /// <summary>
+        /// If the module is readonly
+        /// </summary>
+        /// <value>
+        /// The read only.
+        /// </value>
         public bool? ReadOnly { get; set; }
+        /// <summary>
+        /// If the module is private
+        /// </summary>
+        /// <value>
+        /// The private.
+        /// </value>
         public bool? Private { get; set; }
 
+        /// <summary>
+        /// Initializes a new instance of the <see cref="VbaCode"/> class.
+        /// </summary>
         public VbaCode() { }
+        /// <summary>
+        /// Initializes a new instance of the <see cref="VbaCode"/> class.
+        /// </summary>
+        /// <param name="assembly">The assembly.</param>
+        /// <param name="codeFile">The code file.</param>
+        /// <param name="codeFunc">The code function.</param>
         public VbaCode(Assembly assembly, string codeFile, Func<string, string> codeFunc = null) : this(null, assembly, codeFile, codeFunc) { }
+        /// <summary>
+        /// Initializes a new instance of the <see cref="VbaCode"/> class.
+        /// </summary>
+        /// <param name="name">The name.</param>
+        /// <param name="assembly">The assembly.</param>
+        /// <param name="codeFile">The code file.</param>
+        /// <param name="codeFunc">The code function.</param>
         public VbaCode(string name, Assembly assembly, string codeFile, Func<string, string> codeFunc = null)
         {
             Name = name;
@@ -43,6 +92,10 @@ namespace ExcelTrans
             return this;
         }
 
+        /// <summary>
+        /// Processes the code.
+        /// </summary>
+        /// <returns></returns>
         public string ProcessCode()
         {
             var w = new StringWriter();

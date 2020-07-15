@@ -1,5 +1,4 @@
 ﻿using ExcelTrans.Commands;
-using NPOI.SS.Util;
 using OfficeOpenXml;
 using OfficeOpenXml.ConditionalFormatting;
 using OfficeOpenXml.ConditionalFormatting.Contracts;
@@ -17,6 +16,7 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Drawing;
 using System.Globalization;
+using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Text.Json;
@@ -24,11 +24,20 @@ using System.Xml;
 
 namespace ExcelTrans
 {
+    /// <summary>
+    /// ExcelExtensions
+    /// </summary>
     public static class ExcelExtensions
     {
-
         #region Execute
 
+        /// <summary>
+        /// Executes the command.
+        /// </summary>
+        /// <param name="ctx">The CTX.</param>
+        /// <param name="cmds">The CMDS.</param>
+        /// <param name="after">The after.</param>
+        /// <returns></returns>
         public static object ExecuteCmd(this IExcelContext ctx, IExcelCommand[] cmds, out Action after)
         {
             var frame = ctx.Frame;
@@ -36,12 +45,20 @@ namespace ExcelTrans
             Action action2 = null;
             foreach (var cmd in cmds)
                 if (cmd == null) { }
-                else if (cmd.When <= When.Before) { cmd.Execute(ctx, ref action2); if (action2 != null) { afterActions.Add(action2); action2 = null; } }
+                else if (cmd.When <= When.Normal) { cmd.Execute(ctx, ref action2); if (action2 != null) { afterActions.Add(action2); action2 = null; } }
                 else afterActions.Add(() => { cmd.Execute(ctx, ref action2); if (action2 != null) { afterActions.Add(action2); action2 = null; } });
             after = afterActions.Count > 0 ? () => { foreach (var action in afterActions) action?.Invoke(); } : (Action)null;
             return frame;
         }
 
+        /// <summary>
+        /// Executes the row.
+        /// </summary>
+        /// <param name="ctx">The CTX.</param>
+        /// <param name="when">The when.</param>
+        /// <param name="s">The s.</param>
+        /// <param name="after">The after.</param>
+        /// <returns></returns>
         public static CommandRtn ExecuteRow(this IExcelContext ctx, When when, Collection<string> s, out Action after)
         {
             var cr = CommandRtn.Normal;
@@ -61,6 +78,14 @@ namespace ExcelTrans
             return cr;
         }
 
+        /// <summary>
+        /// Executes the col.
+        /// </summary>
+        /// <param name="ctx">The CTX.</param>
+        /// <param name="s">The s.</param>
+        /// <param name="v">The v.</param>
+        /// <param name="after">The after.</param>
+        /// <returns></returns>
         public static CommandRtn ExecuteCol(this IExcelContext ctx, Collection<string> s, object v, out Action after)
         {
             var cr = CommandRtn.Normal;
@@ -84,15 +109,35 @@ namespace ExcelTrans
 
         #region Write
 
+        /// <summary>
+        /// Writes the row first set.
+        /// </summary>
+        /// <param name="ctx">The CTX.</param>
+        /// <param name="s">The s.</param>
         public static void WriteRowFirstSet(this IExcelContext ctx, Collection<string> s) => ctx.ExecuteRow(When.FirstSet, s, out var after);
+        /// <summary>
+        /// Writes the row first.
+        /// </summary>
+        /// <param name="ctx">The CTX.</param>
+        /// <param name="s">The s.</param>
         public static void WriteRowFirst(this IExcelContext ctx, Collection<string> s) => ctx.ExecuteRow(When.First, s, out var after);
 
+        /// <summary>
+        /// Advances the row.
+        /// </summary>
+        /// <param name="ctx">The CTX.</param>
         public static void AdvanceRow(this IExcelContext ctx) => ctx.CsvY++;
+        /// <summary>
+        /// Writes the row.
+        /// </summary>
+        /// <param name="ctx">The CTX.</param>
+        /// <param name="s">The s.</param>
+        /// <param name="startIndex">The start index.</param>
         public static void WriteRow(this IExcelContext ctx, Collection<string> s, int startIndex = 0)
         {
             var ws = ((ExcelContext)ctx).EnsureWorksheet();
             // execute-row-before
-            var cr = ctx.ExecuteRow(When.Before, s, out var after);
+            var cr = ctx.ExecuteRow(When.Normal, s, out var after);
             if ((cr & CommandRtn.Continue) == CommandRtn.Continue)
                 return;
             //
@@ -117,16 +162,34 @@ namespace ExcelTrans
             after?.Invoke();
             ctx.Y += ctx.DeltaY;
             // execute-row-after
-            ctx.ExecuteRow(When.After, s, out var after2);
+            ctx.ExecuteRow(When.AfterNormal, s, out var after2);
         }
 
+        /// <summary>
+        /// Writes the row last.
+        /// </summary>
+        /// <param name="ctx">The CTX.</param>
+        /// <param name="s">The s.</param>
         public static void WriteRowLast(this IExcelContext ctx, Collection<string> s) => ctx.ExecuteRow(When.Last, s, out var after);
+        /// <summary>
+        /// Writes the row last set.
+        /// </summary>
+        /// <param name="ctx">The CTX.</param>
+        /// <param name="s">The s.</param>
         public static void WriteRowLastSet(this IExcelContext ctx, Collection<string> s) => ctx.ExecuteRow(When.LastSet, s, out var after);
 
         #endregion
 
         #region Vba
 
+        /// <summary>
+        /// Vbas the code module.
+        /// </summary>
+        /// <param name="ctx">The CTX.</param>
+        /// <param name="name">The name.</param>
+        /// <param name="code">The code.</param>
+        /// <param name="moduleKind">Kind of the module.</param>
+        /// <exception cref="ArgumentOutOfRangeException">moduleKind</exception>
         public static void VbaCodeModule(this IExcelContext ctx, string name, VbaCode code, VbaModuleKind moduleKind)
         {
             //if (!string.IsNullOrEmpty(name) && char.IsDigit(name[0]))
@@ -148,6 +211,12 @@ namespace ExcelTrans
             if (code.Private != null) m.Private = code.Private.Value;
         }
 
+        /// <summary>
+        /// Vbas the module.
+        /// </summary>
+        /// <param name="ctx">The CTX.</param>
+        /// <param name="name">The name.</param>
+        /// <param name="code">The code.</param>
         public static void VbaModule(this IExcelContext ctx, string name, VbaCode code)
         {
             //if (!string.IsNullOrEmpty(name) && char.IsDigit(name[0]))
@@ -161,6 +230,11 @@ namespace ExcelTrans
             if (code.Private != null) m.Private = code.Private.Value;
         }
 
+        /// <summary>
+        /// Vbas the reference.
+        /// </summary>
+        /// <param name="ctx">The CTX.</param>
+        /// <param name="libraries">The libraries.</param>
         public static void VbaReference(this IExcelContext ctx, VbaLibrary[] libraries)
         {
             var references = ((ExcelContext)ctx).EnsureVba().References;
@@ -168,12 +242,20 @@ namespace ExcelTrans
                 references.Add(new ExcelVbaReference { Name = library.Name, Libid = library.Libid.ToString() });
         }
 
+        /// <summary>
+        /// Vbas the signature.
+        /// </summary>
+        /// <param name="ctx">The CTX.</param>
         public static void VbaSignature(this IExcelContext ctx)
         {
             var v = ((ExcelContext)ctx).EnsureVba();
             v.Signature.Certificate = null;
         }
 
+        /// <summary>
+        /// Vbas the protection.
+        /// </summary>
+        /// <param name="ctx">The CTX.</param>
         public static void VbaProtection(this IExcelContext ctx)
         {
             var v = ((ExcelContext)ctx).EnsureVba();
@@ -184,24 +266,84 @@ namespace ExcelTrans
 
         #region Workbook
 
+        /// <summary>
+        /// Workbooks the protection.
+        /// </summary>
+        /// <param name="ctx">The CTX.</param>
+        /// <param name="value">The value.</param>
+        /// <param name="protectionKind">Kind of the protection.</param>
+        /// <exception cref="ArgumentOutOfRangeException">protectionKind</exception>
         public static void WorkbookProtection(this IExcelContext ctx, object value, WorkbookProtectionKind protectionKind)
         {
             var protection = ((ExcelContext)ctx).WB.Protection;
             switch (protectionKind)
             {
-                case WorkbookProtectionKind.LockStructure: protection.LockStructure = true; break;
-                case WorkbookProtectionKind.LockWindows: protection.LockWindows = true; break;
-                case WorkbookProtectionKind.LockRevision: protection.LockRevision = true; break;
-                case WorkbookProtectionKind.SetPassword: protection.SetPassword(null); break;
+                case WorkbookProtectionKind.LockStructure: protection.LockStructure = value.CastValue<bool>(); break;
+                case WorkbookProtectionKind.LockWindows: protection.LockWindows = value.CastValue<bool>(); break;
+                case WorkbookProtectionKind.LockRevision: protection.LockRevision = value.CastValue<bool>(); break;
+                case WorkbookProtectionKind.SetPassword: protection.SetPassword(value.CastValue<string>()); break;
                 default: throw new ArgumentOutOfRangeException(nameof(protectionKind));
             }
         }
 
+        /// <summary>
+        /// Workbooks the name.
+        /// </summary>
+        /// <param name="ctx">The CTX.</param>
+        /// <param name="name">The name.</param>
+        /// <param name="row">The row.</param>
+        /// <param name="col">The col.</param>
+        /// <param name="nameKind">Kind of the name.</param>
         public static void WorkbookName(this IExcelContext ctx, string name, int row, int col, WorkbookNameKind nameKind = WorkbookNameKind.Add) => WorkbookName(ctx, name, ExcelService.GetAddress(row, col), nameKind);
+        /// <summary>
+        /// Workbooks the name.
+        /// </summary>
+        /// <param name="ctx">The CTX.</param>
+        /// <param name="name">The name.</param>
+        /// <param name="fromRow">From row.</param>
+        /// <param name="fromCol">From col.</param>
+        /// <param name="toRow">To row.</param>
+        /// <param name="toCol">To col.</param>
+        /// <param name="nameKind">Kind of the name.</param>
         public static void WorkbookName(this IExcelContext ctx, string name, int fromRow, int fromCol, int toRow, int toCol, WorkbookNameKind nameKind = WorkbookNameKind.Add) => WorkbookName(ctx, name, ExcelService.GetAddress(fromRow, fromCol, toRow, toCol), nameKind);
+        /// <summary>
+        /// Workbooks the name.
+        /// </summary>
+        /// <param name="ctx">The CTX.</param>
+        /// <param name="name">The name.</param>
+        /// <param name="r">The r.</param>
+        /// <param name="nameKind">Kind of the name.</param>
         public static void WorkbookName(this IExcelContext ctx, string name, Address r, WorkbookNameKind nameKind = WorkbookNameKind.Add) => WorkbookName(ctx, name, ExcelService.GetAddress(r, 0, 0), nameKind);
+        /// <summary>
+        /// Workbooks the name.
+        /// </summary>
+        /// <param name="ctx">The CTX.</param>
+        /// <param name="name">The name.</param>
+        /// <param name="r">The r.</param>
+        /// <param name="row">The row.</param>
+        /// <param name="col">The col.</param>
+        /// <param name="nameKind">Kind of the name.</param>
         public static void WorkbookName(this IExcelContext ctx, string name, Address r, int row, int col, WorkbookNameKind nameKind = WorkbookNameKind.Add) => WorkbookName(ctx, name, ExcelService.GetAddress(r, row, col), nameKind);
+        /// <summary>
+        /// Workbooks the name.
+        /// </summary>
+        /// <param name="ctx">The CTX.</param>
+        /// <param name="name">The name.</param>
+        /// <param name="r">The r.</param>
+        /// <param name="fromRow">From row.</param>
+        /// <param name="fromCol">From col.</param>
+        /// <param name="toRow">To row.</param>
+        /// <param name="toCol">To col.</param>
+        /// <param name="nameKind">Kind of the name.</param>
         public static void WorkbookName(this IExcelContext ctx, string name, Address r, int fromRow, int fromCol, int toRow, int toCol, WorkbookNameKind nameKind = WorkbookNameKind.Add) => WorkbookName(ctx, name, ExcelService.GetAddress(r, fromRow, fromCol, toRow, toCol), nameKind);
+        /// <summary>
+        /// Workbooks the name.
+        /// </summary>
+        /// <param name="ctx">The CTX.</param>
+        /// <param name="name">The name.</param>
+        /// <param name="cells">The cells.</param>
+        /// <param name="nameKind">Kind of the name.</param>
+        /// <exception cref="ArgumentOutOfRangeException">nameKind</exception>
         public static void WorkbookName(this IExcelContext ctx, string name, string cells, WorkbookNameKind nameKind = WorkbookNameKind.Add)
         {
             var names = ((ExcelContext)ctx).WB.Names;
@@ -215,10 +357,35 @@ namespace ExcelTrans
             }
         }
 
+        /// <summary>
+        /// Workbooks the open.
+        /// </summary>
+        /// <param name="ctx">The CTX.</param>
+        /// <param name="path">The path.</param>
+        /// <param name="password">The password.</param>
+        public static void WorkbookOpen(this IExcelContext ctx, string path, string password = null) => WorkbookOpen(ctx, new FileInfo(path), password);
+        /// <summary>
+        /// Workbooks the open.
+        /// </summary>
+        /// <param name="ctx">The CTX.</param>
+        /// <param name="path">The path.</param>
+        /// <param name="password">The password.</param>
+        public static void WorkbookOpen(this IExcelContext ctx, FileInfo path, string password = null)
+        {
+            var ctx2 = (ExcelContext)ctx;
+            ctx2.P = password == null ? new ExcelPackage(path) : new ExcelPackage(path, password);
+            ctx2.WB = ctx2.P.Workbook;
+        }
+
         #endregion
 
         #region Worksheet
 
+        /// <summary>
+        /// Worksheets the add.
+        /// </summary>
+        /// <param name="ctx">The CTX.</param>
+        /// <param name="name">The name.</param>
         public static void WorksheetAdd(this IExcelContext ctx, string name)
         {
             ctx.Flush();
@@ -227,6 +394,12 @@ namespace ExcelTrans
             ctx.DeltaX = ctx.DeltaY = ctx.XStart = ctx.Y = 1;
         }
 
+        /// <summary>
+        /// Worksheets the copy.
+        /// </summary>
+        /// <param name="ctx">The CTX.</param>
+        /// <param name="name">The name.</param>
+        /// <param name="newName">The new name.</param>
         public static void WorksheetCopy(this IExcelContext ctx, string name, string newName)
         {
             ctx.Flush();
@@ -235,12 +408,22 @@ namespace ExcelTrans
             ctx.DeltaX = ctx.DeltaY = ctx.XStart = ctx.Y = 1;
         }
 
+        /// <summary>
+        /// Worksheets the delete.
+        /// </summary>
+        /// <param name="ctx">The CTX.</param>
+        /// <param name="name">The name.</param>
         public static void WorksheetDelete(this IExcelContext ctx, string name)
         {
             var ctx2 = (ExcelContext)ctx;
             ctx2.WB.Worksheets.Delete(name);
         }
 
+        /// <summary>
+        /// Worksheets the get.
+        /// </summary>
+        /// <param name="ctx">The CTX.</param>
+        /// <param name="name">The name.</param>
         public static void WorksheetGet(this IExcelContext ctx, string name)
         {
             ctx.Flush();
@@ -250,6 +433,12 @@ namespace ExcelTrans
             ctx.DeltaX = ctx.DeltaY = ctx.XStart = ctx.Y = 1;
         }
 
+        /// <summary>
+        /// Worksheets the move.
+        /// </summary>
+        /// <param name="ctx">The CTX.</param>
+        /// <param name="name">The name.</param>
+        /// <param name="targetName">Name of the target.</param>
         public static void WorksheetMove(this IExcelContext ctx, string name, string targetName)
         {
             ctx.Flush();
@@ -263,8 +452,854 @@ namespace ExcelTrans
         }
 
         // https://www.c-sharpcorner.com/blogs/how-to-adding-pictures-or-images-in-excel-sheet-using-epplus-net-application-c-sharp-part-five
+        /// <summary>
+        /// Drawings the specified address.
+        /// </summary>
+        /// <param name="ctx">The CTX.</param>
+        /// <param name="address">The address.</param>
+        /// <param name="name">The name.</param>
+        /// <param name="value">The value.</param>
+        /// <param name="drawingKind">Kind of the drawing.</param>
+        /// <exception cref="ArgumentOutOfRangeException">drawingKind</exception>
         public static void Drawing(this IExcelContext ctx, string address, string name, object value, DrawingKind drawingKind)
         {
+            // drawings
+            var token = JsonDocument.Parse(value is string @string ? @string : JsonSerializer.Serialize(value)).RootElement;
+            var drawings = ((ExcelContext)ctx).WS.Drawings;
+            var drawing = ApplyDrawing(name, token, drawings, drawingKind);
+
+            // address
+            if (string.IsNullOrEmpty(address))
+                return;
+            var range = ctx.Get(address);
+            if (!token.TryGetProperty("from", out var _))
+            {
+                drawing.From.Column = range.Start.Column;
+                drawing.From.Row = range.Start.Row;
+            }
+            if (!token.TryGetProperty("to", out var _))
+            {
+                drawing.To.Column = range.End.Column + 1;
+                drawing.To.Row = range.End.Row + 1;
+            }
+        }
+
+        /// <summary>
+        /// Views the action.
+        /// </summary>
+        /// <param name="ctx">The CTX.</param>
+        /// <param name="value">The value.</param>
+        /// <param name="actionKind">Kind of the action.</param>
+        /// <exception cref="ArgumentOutOfRangeException">actionKind</exception>
+        public static void ViewAction(this IExcelContext ctx, object value, ViewActionKind actionKind)
+        {
+            var view = ((ExcelContext)ctx).WS.View;
+            switch (actionKind)
+            {
+                case ViewActionKind.FreezePane: ExcelService.CellToInts((string)value, out var row, out var col); view.FreezePanes(row, col); break;
+                case ViewActionKind.SetTabSelected: view.SetTabSelected(); break;
+                case ViewActionKind.UnfreezePane: view.UnFreezePanes(); break;
+                default: throw new ArgumentOutOfRangeException(nameof(actionKind));
+            }
+        }
+
+        /// <summary>
+        /// Protections the specified value.
+        /// </summary>
+        /// <param name="ctx">The CTX.</param>
+        /// <param name="value">The value.</param>
+        /// <param name="protectionKind">Kind of the protection.</param>
+        public static void Protection(this IExcelContext ctx, object value, ProtectionKind protectionKind)
+        {
+            var protection = ((ExcelContext)ctx).WS.Protection;
+            switch (protectionKind)
+            {
+                case ProtectionKind.AllowFormatRows: protection.AllowFormatRows = value.CastValue<bool>(); break;
+                case ProtectionKind.AllowSort: protection.AllowSort = value.CastValue<bool>(); break;
+                case ProtectionKind.AllowDeleteRows: protection.AllowDeleteRows = value.CastValue<bool>(); break;
+                case ProtectionKind.AllowDeleteColumns: protection.AllowDeleteColumns = value.CastValue<bool>(); break;
+                case ProtectionKind.AllowInsertHyperlinks: protection.AllowInsertHyperlinks = value.CastValue<bool>(); break;
+                case ProtectionKind.AllowInsertRows: protection.AllowInsertRows = value.CastValue<bool>(); break;
+                case ProtectionKind.AllowInsertColumns: protection.AllowInsertColumns = value.CastValue<bool>(); break;
+                case ProtectionKind.AllowAutoFilter: protection.AllowAutoFilter = value.CastValue<bool>(); break;
+                case ProtectionKind.AllowPivotTables: protection.AllowPivotTables = value.CastValue<bool>(); break;
+                case ProtectionKind.AllowFormatCells: protection.AllowFormatCells = value.CastValue<bool>(); break;
+                case ProtectionKind.AllowEditScenarios: protection.AllowEditScenarios = value.CastValue<bool>(); break;
+                case ProtectionKind.AllowEditObject: protection.AllowEditObject = value.CastValue<bool>(); break;
+                case ProtectionKind.AllowSelectUnlockedCells: protection.AllowSelectUnlockedCells = value.CastValue<bool>(); break;
+                case ProtectionKind.AllowSelectLockedCells: protection.AllowSelectLockedCells = value.CastValue<bool>(); break;
+                case ProtectionKind.IsProtected: protection.IsProtected = value.CastValue<bool>(); break;
+                case ProtectionKind.AllowFormatColumns: protection.AllowFormatColumns = value.CastValue<bool>(); break;
+                case ProtectionKind.SetPassword: protection.SetPassword(value.CastValue<string>()); break;
+                default: throw new ArgumentOutOfRangeException(nameof(protectionKind));
+            }
+        }
+
+        /// <summary>
+        /// Conditionals the formatting.
+        /// </summary>
+        /// <param name="ctx">The CTX.</param>
+        /// <param name="row">The row.</param>
+        /// <param name="col">The col.</param>
+        /// <param name="value">The value.</param>
+        /// <param name="formattingKind">Kind of the formatting.</param>
+        /// <param name="priority">The priority.</param>
+        /// <param name="stopIfTrue">if set to <c>true</c> [stop if true].</param>
+        public static void ConditionalFormatting(this IExcelContext ctx, int row, int col, object value, ConditionalFormattingKind formattingKind, int? priority, bool stopIfTrue) => ConditionalFormatting(ctx, ExcelService.GetAddress(row, col), value, formattingKind, priority, stopIfTrue);
+        /// <summary>
+        /// Conditionals the formatting.
+        /// </summary>
+        /// <param name="ctx">The CTX.</param>
+        /// <param name="fromRow">From row.</param>
+        /// <param name="fromCol">From col.</param>
+        /// <param name="toRow">To row.</param>
+        /// <param name="toCol">To col.</param>
+        /// <param name="value">The value.</param>
+        /// <param name="formattingKind">Kind of the formatting.</param>
+        /// <param name="priority">The priority.</param>
+        /// <param name="stopIfTrue">if set to <c>true</c> [stop if true].</param>
+        public static void ConditionalFormatting(this IExcelContext ctx, int fromRow, int fromCol, int toRow, int toCol, object value, ConditionalFormattingKind formattingKind, int? priority, bool stopIfTrue) => ConditionalFormatting(ctx, ExcelService.GetAddress(fromRow, fromCol, toRow, toCol), value, formattingKind, priority, stopIfTrue);
+        /// <summary>
+        /// Conditionals the formatting.
+        /// </summary>
+        /// <param name="ctx">The CTX.</param>
+        /// <param name="r">The r.</param>
+        /// <param name="value">The value.</param>
+        /// <param name="formattingKind">Kind of the formatting.</param>
+        /// <param name="priority">The priority.</param>
+        /// <param name="stopIfTrue">if set to <c>true</c> [stop if true].</param>
+        public static void ConditionalFormatting(this IExcelContext ctx, Address r, object value, ConditionalFormattingKind formattingKind, int? priority, bool stopIfTrue) => ConditionalFormatting(ctx, ExcelService.GetAddress(r, 0, 0), value, formattingKind, priority, stopIfTrue);
+        /// <summary>
+        /// Conditionals the formatting.
+        /// </summary>
+        /// <param name="ctx">The CTX.</param>
+        /// <param name="r">The r.</param>
+        /// <param name="row">The row.</param>
+        /// <param name="col">The col.</param>
+        /// <param name="value">The value.</param>
+        /// <param name="formattingKind">Kind of the formatting.</param>
+        /// <param name="priority">The priority.</param>
+        /// <param name="stopIfTrue">if set to <c>true</c> [stop if true].</param>
+        public static void ConditionalFormatting(this IExcelContext ctx, Address r, int row, int col, object value, ConditionalFormattingKind formattingKind, int? priority, bool stopIfTrue) => ConditionalFormatting(ctx, ExcelService.GetAddress(r, row, col), value, formattingKind, priority, stopIfTrue);
+        /// <summary>
+        /// Conditionals the formatting.
+        /// </summary>
+        /// <param name="ctx">The CTX.</param>
+        /// <param name="r">The r.</param>
+        /// <param name="fromRow">From row.</param>
+        /// <param name="fromCol">From col.</param>
+        /// <param name="toRow">To row.</param>
+        /// <param name="toCol">To col.</param>
+        /// <param name="value">The value.</param>
+        /// <param name="formattingKind">Kind of the formatting.</param>
+        /// <param name="priority">The priority.</param>
+        /// <param name="stopIfTrue">if set to <c>true</c> [stop if true].</param>
+        public static void ConditionalFormatting(this IExcelContext ctx, Address r, int fromRow, int fromCol, int toRow, int toCol, object value, ConditionalFormattingKind formattingKind, int? priority, bool stopIfTrue) => ConditionalFormatting(ctx, ExcelService.GetAddress(r, fromRow, fromCol, toRow, toCol), value, formattingKind, priority, stopIfTrue);
+        /// <summary>
+        /// Conditionals the formatting.
+        /// </summary>
+        /// <param name="ctx">The CTX.</param>
+        /// <param name="address">The address.</param>
+        /// <param name="value">The value.</param>
+        /// <param name="formattingKind">Kind of the formatting.</param>
+        /// <param name="priority">The priority.</param>
+        /// <param name="stopIfTrue">if set to <c>true</c> [stop if true].</param>
+        /// <exception cref="ArgumentNullException">value</exception>
+        /// <exception cref="ArgumentOutOfRangeException">formattingKind</exception>
+        public static void ConditionalFormatting(this IExcelContext ctx, string address, object value, ConditionalFormattingKind formattingKind, int? priority, bool stopIfTrue)
+        {
+            if (value == null)
+                throw new ArgumentNullException(nameof(value));
+            var token = JsonDocument.Parse(value is string @string ? @string : JsonSerializer.Serialize(value)).RootElement;
+            var formatting = ((ExcelContext)ctx).WS.ConditionalFormatting;
+            var ruleAddress = new ExcelAddress(ctx.DecodeAddress(address));
+            ApplyConditionalFormatting(token, formatting, formattingKind, ruleAddress, priority, stopIfTrue);
+        }
+
+        #endregion
+
+        #region Cell
+
+        /// <summary>
+        /// Cells the style.
+        /// </summary>
+        /// <param name="ctx">The CTX.</param>
+        /// <param name="row">The row.</param>
+        /// <param name="col">The col.</param>
+        /// <param name="styles">The styles.</param>
+        public static void CellStyle(this IExcelContext ctx, int row, int col, params string[] styles) => CellStyle(ctx, ExcelService.GetAddress(row, col), styles);
+        /// <summary>
+        /// Cells the style.
+        /// </summary>
+        /// <param name="ctx">The CTX.</param>
+        /// <param name="fromRow">From row.</param>
+        /// <param name="fromCol">From col.</param>
+        /// <param name="toRow">To row.</param>
+        /// <param name="toCol">To col.</param>
+        /// <param name="styles">The styles.</param>
+        public static void CellStyle(this IExcelContext ctx, int fromRow, int fromCol, int toRow, int toCol, params string[] styles) => CellStyle(ctx, ExcelService.GetAddress(fromRow, fromCol, toRow, toCol), styles);
+        /// <summary>
+        /// Cells the style.
+        /// </summary>
+        /// <param name="ctx">The CTX.</param>
+        /// <param name="r">The r.</param>
+        /// <param name="styles">The styles.</param>
+        public static void CellStyle(this IExcelContext ctx, Address r, params string[] styles) => CellStyle(ctx, ExcelService.GetAddress(r, 0, 0), styles);
+        /// <summary>
+        /// Cells the style.
+        /// </summary>
+        /// <param name="ctx">The CTX.</param>
+        /// <param name="r">The r.</param>
+        /// <param name="row">The row.</param>
+        /// <param name="col">The col.</param>
+        /// <param name="styles">The styles.</param>
+        public static void CellStyle(this IExcelContext ctx, Address r, int row, int col, params string[] styles) => CellStyle(ctx, ExcelService.GetAddress(r, row, col), styles);
+        /// <summary>
+        /// Cells the style.
+        /// </summary>
+        /// <param name="ctx">The CTX.</param>
+        /// <param name="r">The r.</param>
+        /// <param name="fromRow">From row.</param>
+        /// <param name="fromCol">From col.</param>
+        /// <param name="toRow">To row.</param>
+        /// <param name="toCol">To col.</param>
+        /// <param name="styles">The styles.</param>
+        public static void CellStyle(this IExcelContext ctx, Address r, int fromRow, int fromCol, int toRow, int toCol, params string[] styles) => CellStyle(ctx, ExcelService.GetAddress(r, fromRow, fromCol, toRow, toCol), styles);
+        /// <summary>
+        /// Cells the style.
+        /// </summary>
+        /// <param name="ctx">The CTX.</param>
+        /// <param name="cells">The cells.</param>
+        /// <param name="styles">The styles.</param>
+        public static void CellStyle(this IExcelContext ctx, string cells, string[] styles)
+        {
+            var range = ctx.Get(cells);
+            foreach (var style in styles)
+                ApplyStyle(style, range.Style, null);
+        }
+
+        /// <summary>
+        /// Cells the validation.
+        /// </summary>
+        /// <param name="ctx">The CTX.</param>
+        /// <param name="validationKind">Kind of the validation.</param>
+        /// <param name="row">The row.</param>
+        /// <param name="col">The col.</param>
+        /// <param name="rules">The rules.</param>
+        public static void CellValidation(this IExcelContext ctx, CellValidationKind validationKind, int row, int col, params string[] rules) => CellValidation(ctx, validationKind, ExcelService.GetAddress(row, col), rules);
+        /// <summary>
+        /// Cells the validation.
+        /// </summary>
+        /// <param name="ctx">The CTX.</param>
+        /// <param name="validationKind">Kind of the validation.</param>
+        /// <param name="fromRow">From row.</param>
+        /// <param name="fromCol">From col.</param>
+        /// <param name="toRow">To row.</param>
+        /// <param name="toCol">To col.</param>
+        /// <param name="rules">The rules.</param>
+        public static void CellValidation(this IExcelContext ctx, CellValidationKind validationKind, int fromRow, int fromCol, int toRow, int toCol, params string[] rules) => CellValidation(ctx, validationKind, ExcelService.GetAddress(fromRow, fromCol, toRow, toCol), rules);
+        /// <summary>
+        /// Cells the validation.
+        /// </summary>
+        /// <param name="ctx">The CTX.</param>
+        /// <param name="validationKind">Kind of the validation.</param>
+        /// <param name="r">The r.</param>
+        /// <param name="rules">The rules.</param>
+        public static void CellValidation(this IExcelContext ctx, CellValidationKind validationKind, Address r, params string[] rules) => CellValidation(ctx, validationKind, ExcelService.GetAddress(r, 0, 0), rules);
+        /// <summary>
+        /// Cells the validation.
+        /// </summary>
+        /// <param name="ctx">The CTX.</param>
+        /// <param name="validationKind">Kind of the validation.</param>
+        /// <param name="r">The r.</param>
+        /// <param name="row">The row.</param>
+        /// <param name="col">The col.</param>
+        /// <param name="rules">The rules.</param>
+        public static void CellValidation(this IExcelContext ctx, CellValidationKind validationKind, Address r, int row, int col, params string[] rules) => CellValidation(ctx, validationKind, ExcelService.GetAddress(r, row, col), rules);
+        /// <summary>
+        /// Cells the validation.
+        /// </summary>
+        /// <param name="ctx">The CTX.</param>
+        /// <param name="validationKind">Kind of the validation.</param>
+        /// <param name="r">The r.</param>
+        /// <param name="fromRow">From row.</param>
+        /// <param name="fromCol">From col.</param>
+        /// <param name="toRow">To row.</param>
+        /// <param name="toCol">To col.</param>
+        /// <param name="rules">The rules.</param>
+        public static void CellValidation(this IExcelContext ctx, CellValidationKind validationKind, Address r, int fromRow, int fromCol, int toRow, int toCol, params string[] rules) => CellValidation(ctx, validationKind, ExcelService.GetAddress(r, fromRow, fromCol, toRow, toCol), rules);
+        /// <summary>
+        /// Cells the validation.
+        /// </summary>
+        /// <param name="ctx">The CTX.</param>
+        /// <param name="validationKind">Kind of the validation.</param>
+        /// <param name="cells">The cells.</param>
+        /// <param name="rules">The rules.</param>
+        /// <exception cref="ArgumentOutOfRangeException">validationKind</exception>
+        public static void CellValidation(this IExcelContext ctx, CellValidationKind validationKind, string cells, string[] rules)
+        {
+            var validations = ((ExcelContext)ctx).WS.DataValidations;
+            IExcelDataValidation validation;
+            switch (validationKind)
+            {
+                case CellValidationKind.Find: validation = validations.Find(x => x.Address.Address == cells); break;
+                case CellValidationKind.AnyValidation: validation = validations.AddAnyValidation(cells); break;
+                case CellValidationKind.CustomValidation: validation = validations.AddCustomValidation(cells); break;
+                case CellValidationKind.DateTimeValidation: validation = validations.AddDateTimeValidation(cells); break;
+                case CellValidationKind.DecimalValidation: validation = validations.AddDecimalValidation(cells); break;
+                case CellValidationKind.IntegerValidation: validation = validations.AddIntegerValidation(cells); break;
+                case CellValidationKind.ListValidation: validation = validations.AddListValidation(cells); break;
+                case CellValidationKind.TextLengthValidation: validation = validations.AddTextLengthValidation(cells); break;
+                case CellValidationKind.TimeValidation: validation = validations.AddTimeValidation(cells); break;
+                default: throw new ArgumentOutOfRangeException(nameof(validationKind));
+            }
+            foreach (var rule in rules)
+                ApplyCellValidation(rule, validation);
+        }
+
+        /// <summary>
+        /// Cells the value.
+        /// </summary>
+        /// <param name="ctx">The CTX.</param>
+        /// <param name="row">The row.</param>
+        /// <param name="col">The col.</param>
+        /// <param name="value">The value.</param>
+        /// <param name="valueKind">Kind of the value.</param>
+        public static void CellValue(this IExcelContext ctx, int row, int col, object value, CellValueKind valueKind = CellValueKind.Value) => ctx.CellValue(ExcelService.GetAddress(row, col), value, valueKind);
+        /// <summary>
+        /// Cells the value.
+        /// </summary>
+        /// <param name="ctx">The CTX.</param>
+        /// <param name="fromRow">From row.</param>
+        /// <param name="fromCol">From col.</param>
+        /// <param name="toRow">To row.</param>
+        /// <param name="toCol">To col.</param>
+        /// <param name="value">The value.</param>
+        /// <param name="valueKind">Kind of the value.</param>
+        public static void CellValue(this IExcelContext ctx, int fromRow, int fromCol, int toRow, int toCol, object value, CellValueKind valueKind = CellValueKind.Value) => ctx.CellValue(ExcelService.GetAddress(fromRow, fromCol, toRow, toCol), value, valueKind);
+        /// <summary>
+        /// Cells the value.
+        /// </summary>
+        /// <param name="ctx">The CTX.</param>
+        /// <param name="r">The r.</param>
+        /// <param name="value">The value.</param>
+        /// <param name="valueKind">Kind of the value.</param>
+        public static void CellValue(this IExcelContext ctx, Address r, object value, CellValueKind valueKind = CellValueKind.Value) => ctx.CellValue(ExcelService.GetAddress(r, 0, 0), value, valueKind);
+        /// <summary>
+        /// Cells the value.
+        /// </summary>
+        /// <param name="ctx">The CTX.</param>
+        /// <param name="r">The r.</param>
+        /// <param name="row">The row.</param>
+        /// <param name="col">The col.</param>
+        /// <param name="value">The value.</param>
+        /// <param name="valueKind">Kind of the value.</param>
+        public static void CellValue(this IExcelContext ctx, Address r, int row, int col, object value, CellValueKind valueKind = CellValueKind.Value) => ctx.CellValue(ExcelService.GetAddress(r, row, col), value, valueKind);
+        /// <summary>
+        /// Cells the value.
+        /// </summary>
+        /// <param name="ctx">The CTX.</param>
+        /// <param name="r">The r.</param>
+        /// <param name="fromRow">From row.</param>
+        /// <param name="fromCol">From col.</param>
+        /// <param name="toRow">To row.</param>
+        /// <param name="toCol">To col.</param>
+        /// <param name="value">The value.</param>
+        /// <param name="valueKind">Kind of the value.</param>
+        public static void CellValue(this IExcelContext ctx, Address r, int fromRow, int fromCol, int toRow, int toCol, object value, CellValueKind valueKind = CellValueKind.Value) => ctx.CellValue(ExcelService.GetAddress(r, fromRow, fromCol, toRow, toCol), value, valueKind);
+        /// <summary>
+        /// Cells the value.
+        /// </summary>
+        /// <param name="ctx">The CTX.</param>
+        /// <param name="cells">The cells.</param>
+        /// <param name="value">The value.</param>
+        /// <param name="valueKind">Kind of the value.</param>
+        /// <exception cref="ArgumentOutOfRangeException">valueKind</exception>
+        public static void CellValue(this IExcelContext ctx, string cells, object value, CellValueKind valueKind = CellValueKind.Value)
+        {
+            var advance = false;
+            var range = ctx.Get(cells);
+            var values = value == null || !(value is Array array) ? new[] { value } : array;
+            foreach (var val in values)
+            {
+                if (advance) range = ctx.Next(range);
+                else advance = true;
+                switch (valueKind)
+                {
+                    case CellValueKind.Value: case CellValueKind.Text: range.Value = val; break;
+                    case CellValueKind.AutoFilter: range.AutoFilter = val.CastValue<bool>(); break;
+                    case CellValueKind.AutoFitColumns: range.AutoFitColumns(); break;
+                    case CellValueKind.Comment: range.Comment.Text = (string)val; break;
+                    //case CellValueKind.CommentMore: break;
+                    //case CellValueKind.ConditionalFormattingMore: break;
+                    case CellValueKind.Copy: var range2 = ((ExcelContext)ctx).WS.Cells[ctx.DecodeAddress((string)val)]; range.Copy(range2); break;
+                    case CellValueKind.Formula: range.Formula = (string)val; break;
+                    case CellValueKind.FormulaR1C1: range.FormulaR1C1 = (string)val; break;
+                    case CellValueKind.Hyperlink: range.Hyperlink = new Uri((string)val); break;
+                    case CellValueKind.Merge: range.Merge = val.CastValue<bool>(); break;
+                    case CellValueKind.RichText: range.RichText.Add((string)val); break;
+                    case CellValueKind.RichTextClear: range.RichText.Clear(); break;
+                    case CellValueKind.StyleName: range.StyleName = (string)val; break;
+                    default: throw new ArgumentOutOfRangeException(nameof(valueKind));
+                }
+                if (val is DateTime) range.Style.Numberformat.Format = DateTimeFormatInfo.CurrentInfo.ShortDatePattern;
+            }
+        }
+
+        /// <summary>
+        /// Gets the cell value.
+        /// </summary>
+        /// <param name="ctx">The CTX.</param>
+        /// <param name="row">The row.</param>
+        /// <param name="col">The col.</param>
+        /// <param name="valueKind">Kind of the value.</param>
+        /// <returns></returns>
+        public static object GetCellValue(this IExcelContext ctx, int row, int col, CellValueKind valueKind = CellValueKind.Value) => ctx.GetCellValue(ExcelService.GetAddress(row, col), valueKind);
+        /// <summary>
+        /// Gets the cell value.
+        /// </summary>
+        /// <param name="ctx">The CTX.</param>
+        /// <param name="fromRow">From row.</param>
+        /// <param name="fromCol">From col.</param>
+        /// <param name="toRow">To row.</param>
+        /// <param name="toCol">To col.</param>
+        /// <param name="valueKind">Kind of the value.</param>
+        /// <returns></returns>
+        public static object GetCellValue(this IExcelContext ctx, int fromRow, int fromCol, int toRow, int toCol, CellValueKind valueKind = CellValueKind.Value) => ctx.GetCellValue(ExcelService.GetAddress(fromRow, fromCol, toRow, toCol), valueKind);
+        /// <summary>
+        /// Gets the cell value.
+        /// </summary>
+        /// <param name="ctx">The CTX.</param>
+        /// <param name="r">The r.</param>
+        /// <param name="valueKind">Kind of the value.</param>
+        /// <returns></returns>
+        public static object GetCellValue(this IExcelContext ctx, Address r, CellValueKind valueKind = CellValueKind.Value) => ctx.GetCellValue(ExcelService.GetAddress(r, 0, 0), valueKind);
+        /// <summary>
+        /// Gets the cell value.
+        /// </summary>
+        /// <param name="ctx">The CTX.</param>
+        /// <param name="r">The r.</param>
+        /// <param name="row">The row.</param>
+        /// <param name="col">The col.</param>
+        /// <param name="valueKind">Kind of the value.</param>
+        /// <returns></returns>
+        public static object GetCellValue(this IExcelContext ctx, Address r, int row, int col, CellValueKind valueKind = CellValueKind.Value) => ctx.GetCellValue(ExcelService.GetAddress(r, row, col), valueKind);
+        /// <summary>
+        /// Gets the cell value.
+        /// </summary>
+        /// <param name="ctx">The CTX.</param>
+        /// <param name="r">The r.</param>
+        /// <param name="fromRow">From row.</param>
+        /// <param name="fromCol">From col.</param>
+        /// <param name="toRow">To row.</param>
+        /// <param name="toCol">To col.</param>
+        /// <param name="valueKind">Kind of the value.</param>
+        /// <returns></returns>
+        public static object GetCellValue(this IExcelContext ctx, Address r, int fromRow, int fromCol, int toRow, int toCol, CellValueKind valueKind = CellValueKind.Value) => ctx.GetCellValue(ExcelService.GetAddress(r, fromRow, fromCol, toRow, toCol), valueKind);
+        /// <summary>
+        /// Gets the cell value.
+        /// </summary>
+        /// <param name="ctx">The CTX.</param>
+        /// <param name="cells">The cells.</param>
+        /// <param name="valueKind">Kind of the value.</param>
+        /// <returns></returns>
+        /// <exception cref="ArgumentOutOfRangeException">valueKind</exception>
+        public static object GetCellValue(this IExcelContext ctx, string cells, CellValueKind valueKind = CellValueKind.Value)
+        {
+            var range = ctx.Get(cells);
+            switch (valueKind)
+            {
+                case CellValueKind.Value: return range.Value;
+                case CellValueKind.Text: return range.Text;
+                case CellValueKind.AutoFilter: return range.AutoFilter;
+                case CellValueKind.Comment: return range.Comment.Text;
+                //case CellValueKind.ConditionalFormattingMore: return null;
+                case CellValueKind.DataValidation: return range.DataValidation; // get-only
+                case CellValueKind.Formula: return range.Formula;
+                case CellValueKind.FormulaR1C1: return range.FormulaR1C1;
+                case CellValueKind.Hyperlink: return range.Hyperlink;
+                case CellValueKind.Merge: return range.Merge;
+                case CellValueKind.StyleName: return range.StyleName;
+                default: throw new ArgumentOutOfRangeException(nameof(valueKind));
+            }
+        }
+
+        #endregion
+
+        #region Column
+
+        /// <summary>
+        /// Deletes the column.
+        /// </summary>
+        /// <param name="ctx">The CTX.</param>
+        /// <param name="column">The column.</param>
+        public static void DeleteColumn(this IExcelContext ctx, int column) => ((ExcelContext)ctx).WS.DeleteColumn(column);
+        /// <summary>
+        /// Deletes the column.
+        /// </summary>
+        /// <param name="ctx">The CTX.</param>
+        /// <param name="columnFrom">The column from.</param>
+        /// <param name="columns">The columns.</param>
+        public static void DeleteColumn(this IExcelContext ctx, int columnFrom, int columns) => ((ExcelContext)ctx).WS.DeleteColumn(columnFrom, columns);
+
+        /// <summary>
+        /// Inserts the column.
+        /// </summary>
+        /// <param name="ctx">The CTX.</param>
+        /// <param name="columnFrom">The column from.</param>
+        /// <param name="columns">The columns.</param>
+        public static void InsertColumn(this IExcelContext ctx, int columnFrom, int columns) => ((ExcelContext)ctx).WS.InsertColumn(columnFrom, columns);
+        /// <summary>
+        /// Inserts the column.
+        /// </summary>
+        /// <param name="ctx">The CTX.</param>
+        /// <param name="columnFrom">The column from.</param>
+        /// <param name="columns">The columns.</param>
+        /// <param name="copyStylesFromColumn">The copy styles from column.</param>
+        public static void InsertColumn(this IExcelContext ctx, int columnFrom, int columns, int copyStylesFromColumn) => ((ExcelContext)ctx).WS.InsertColumn(columnFrom, columns, copyStylesFromColumn);
+
+        /// <summary>
+        /// Columns the value.
+        /// </summary>
+        /// <param name="ctx">The CTX.</param>
+        /// <param name="col">The col.</param>
+        /// <param name="value">The value.</param>
+        /// <param name="valueKind">Kind of the value.</param>
+        public static void ColumnValue(this IExcelContext ctx, string col, object value, ColumnValueKind valueKind) => ColumnValue(ctx, ExcelService.ColToInt(col), value, valueKind);
+        /// <summary>
+        /// Columns the value.
+        /// </summary>
+        /// <param name="ctx">The CTX.</param>
+        /// <param name="col">The col.</param>
+        /// <param name="value">The value.</param>
+        /// <param name="valueKind">Kind of the value.</param>
+        /// <exception cref="ArgumentOutOfRangeException">valueKind</exception>
+        public static void ColumnValue(this IExcelContext ctx, int col, object value, ColumnValueKind valueKind)
+        {
+            var advance = false;
+            var column = ((ExcelContext)ctx).WS.Column(col);
+            var values = value == null || !(value is Array array) ? new[] { value } : array;
+            foreach (var val in values)
+            {
+                if (advance) column = ctx.Next(column);
+                else advance = true;
+                switch (valueKind)
+                {
+                    case ColumnValueKind.AutoFit: column.AutoFit(); break; // set-only
+                    case ColumnValueKind.BestFit: column.BestFit = val.CastValue<bool>(); break;
+                    case ColumnValueKind.Merged: column.Merged = val.CastValue<bool>(); break;
+                    case ColumnValueKind.Width: column.Width = val.CastValue<double>(); break;
+                    case ColumnValueKind.TrueWidth: column.SetTrueColumnWidth(val.CastValue<double>()); break; // set-only
+                    default: throw new ArgumentOutOfRangeException(nameof(valueKind));
+                }
+            }
+        }
+
+        /// <summary>
+        /// Gets the column value.
+        /// </summary>
+        /// <param name="ctx">The CTX.</param>
+        /// <param name="col">The col.</param>
+        /// <param name="valueKind">Kind of the value.</param>
+        /// <returns></returns>
+        public static object GetColumnValue(this IExcelContext ctx, string col, ColumnValueKind valueKind) => GetColumnValue(ctx, ExcelService.ColToInt(col), valueKind);
+        /// <summary>
+        /// Gets the column value.
+        /// </summary>
+        /// <param name="ctx">The CTX.</param>
+        /// <param name="col">The col.</param>
+        /// <param name="valueKind">Kind of the value.</param>
+        /// <returns></returns>
+        /// <exception cref="ArgumentOutOfRangeException">valueKind</exception>
+        public static object GetColumnValue(this IExcelContext ctx, int col, ColumnValueKind valueKind)
+        {
+            var column = ((ExcelContext)ctx).WS.Column(col);
+            switch (valueKind)
+            {
+                case ColumnValueKind.BestFit: return column.BestFit;
+                case ColumnValueKind.Merged: return column.Merged;
+                case ColumnValueKind.Width: return column.Width;
+                default: throw new ArgumentOutOfRangeException(nameof(valueKind));
+            }
+        }
+
+        #endregion
+
+        #region Row
+
+        /// <summary>
+        /// Deletes the row.
+        /// </summary>
+        /// <param name="ctx">The CTX.</param>
+        /// <param name="row">The row.</param>
+        public static void DeleteRow(this IExcelContext ctx, int row) => ((ExcelContext)ctx).WS.DeleteRow(row);
+        /// <summary>
+        /// Deletes the row.
+        /// </summary>
+        /// <param name="ctx">The CTX.</param>
+        /// <param name="rowFrom">The row from.</param>
+        /// <param name="rows">The rows.</param>
+        public static void DeleteRow(this IExcelContext ctx, int rowFrom, int rows) => ((ExcelContext)ctx).WS.DeleteRow(rowFrom, rows);
+
+        /// <summary>
+        /// Inserts the row.
+        /// </summary>
+        /// <param name="ctx">The CTX.</param>
+        /// <param name="rowFrom">The row from.</param>
+        /// <param name="rows">The rows.</param>
+        public static void InsertRow(this IExcelContext ctx, int rowFrom, int rows) => ((ExcelContext)ctx).WS.InsertRow(rowFrom, rows);
+        /// <summary>
+        /// Inserts the row.
+        /// </summary>
+        /// <param name="ctx">The CTX.</param>
+        /// <param name="rowFrom">The row from.</param>
+        /// <param name="rows">The rows.</param>
+        /// <param name="copyStylesFromRow">The copy styles from row.</param>
+        public static void InsertRow(this IExcelContext ctx, int rowFrom, int rows, int copyStylesFromRow) => ((ExcelContext)ctx).WS.InsertRow(rowFrom, rows, copyStylesFromRow);
+
+        /// <summary>
+        /// Rows the value.
+        /// </summary>
+        /// <param name="ctx">The CTX.</param>
+        /// <param name="row">The row.</param>
+        /// <param name="value">The value.</param>
+        /// <param name="valueKind">Kind of the value.</param>
+        public static void RowValue(this IExcelContext ctx, string row, object value, RowValueKind valueKind) => RowValue(ctx, ExcelService.RowToInt(row), value, valueKind);
+        /// <summary>
+        /// Rows the value.
+        /// </summary>
+        /// <param name="ctx">The CTX.</param>
+        /// <param name="row">The row.</param>
+        /// <param name="value">The value.</param>
+        /// <param name="valueKind">Kind of the value.</param>
+        /// <exception cref="ArgumentOutOfRangeException">valueKind</exception>
+        public static void RowValue(this IExcelContext ctx, int row, object value, RowValueKind valueKind)
+        {
+            var advance = false;
+            var row_ = ((ExcelContext)ctx).WS.Row(row);
+            var values = value == null || !(value is Array array) ? new[] { value } : array;
+            foreach (var val in values)
+            {
+                if (advance) row_ = ctx.Next(row_);
+                else advance = true;
+                switch (valueKind)
+                {
+                    case RowValueKind.Collapsed: row_.Collapsed = val.CastValue<bool>(); break;
+                    case RowValueKind.CustomHeight: row_.CustomHeight = val.CastValue<bool>(); break;
+                    case RowValueKind.Height: row_.Height = val.CastValue<double>(); break;
+                    case RowValueKind.Hidden: row_.Hidden = val.CastValue<bool>(); break;
+                    case RowValueKind.Merged: row_.Merged = val.CastValue<bool>(); break;
+                    case RowValueKind.OutlineLevel: row_.OutlineLevel = val.CastValue<int>(); break;
+                    case RowValueKind.PageBreak: row_.PageBreak = val.CastValue<bool>(); break;
+                    case RowValueKind.Phonetic: row_.Phonetic = val.CastValue<bool>(); break;
+                    case RowValueKind.StyleName: row_.StyleName = val.CastValue<string>(); break;
+                    default: throw new ArgumentOutOfRangeException(nameof(valueKind));
+                }
+            }
+        }
+
+        /// <summary>
+        /// Gets the row value.
+        /// </summary>
+        /// <param name="ctx">The CTX.</param>
+        /// <param name="row">The row.</param>
+        /// <param name="valueKind">Kind of the value.</param>
+        /// <returns></returns>
+        public static object GetRowValue(this IExcelContext ctx, string row, RowValueKind valueKind) => GetRowValue(ctx, ExcelService.RowToInt(row), valueKind);
+        /// <summary>
+        /// Gets the row value.
+        /// </summary>
+        /// <param name="ctx">The CTX.</param>
+        /// <param name="row">The row.</param>
+        /// <param name="valueKind">Kind of the value.</param>
+        /// <returns></returns>
+        /// <exception cref="ArgumentOutOfRangeException">valueKind</exception>
+        public static object GetRowValue(this IExcelContext ctx, int row, RowValueKind valueKind)
+        {
+            var row_ = ((ExcelContext)ctx).WS.Row(row);
+            switch (valueKind)
+            {
+                case RowValueKind.Collapsed: return row_.Collapsed;
+                case RowValueKind.CustomHeight: return row_.CustomHeight;
+                case RowValueKind.Height: return row_.Height;
+                case RowValueKind.Hidden: return row_.Hidden;
+                case RowValueKind.Merged: return row_.Merged;
+                case RowValueKind.OutlineLevel: return row_.OutlineLevel;
+                case RowValueKind.PageBreak: return row_.PageBreak;
+                case RowValueKind.Phonetic: return row_.Phonetic;
+                case RowValueKind.StyleName: return row_.StyleName;
+                default: throw new ArgumentOutOfRangeException(nameof(valueKind));
+            }
+        }
+
+        #endregion
+
+        #region Parse/Apply
+
+        // SYSTEM
+
+        static T ToStaticEnum<T>(string name, T defaultValue = default) =>
+            string.IsNullOrEmpty(name) ? defaultValue :
+            (T)typeof(T).GetProperty(name, BindingFlags.Public | BindingFlags.Static)?.GetValue(null);
+        static Color ParseColor(string name, Color defaultValue = default) =>
+            string.IsNullOrEmpty(name) ? defaultValue :
+            name.StartsWith("#") ? ColorTranslator.FromHtml(name) :
+            ToStaticEnum<Color>(name);
+        //static T ToEnum<T>(string name, T defaultValue = default) => !string.IsNullOrEmpty(name) ? (T)Enum.Parse(typeof(T), name) : defaultValue;
+        static T ToEnum<T>(JsonElement name, T defaultValue = default)
+            => name.ValueKind == JsonValueKind.String && name.GetString() is string z0 && !string.IsNullOrEmpty(z0) ? (T)Enum.Parse(typeof(T), z0)
+            : name.ValueKind == JsonValueKind.Number && name.GetInt32() is int z1 ? (T)(object)z1
+            : defaultValue;
+
+        // APPLY
+
+        static void ApplyConditionalFormatting(JsonElement token, ExcelConditionalFormattingCollection formatting, ConditionalFormattingKind formattingKind, ExcelAddress ruleAddress, int? priority, bool stopIfTrue)
+        {
+            void ApplyColorScale(ExcelConditionalFormattingColorScaleValue val, JsonElement t)
+            {
+                if (t.TryGetProperty("type", out var z2)) val.Type = ToEnum<eExcelConditionalFormattingValueObjectType>(z2);
+                if (t.TryGetProperty("color", out z2)) val.Color = ParseColor(z2.GetString(), Color.White);
+                if (t.TryGetProperty("value", out z2)) val.Value = z2.GetDouble();
+                if (t.TryGetProperty("formula", out z2)) val.Formula = z2.GetString();
+            }
+            void ApplyIconDataBar(ExcelConditionalFormattingIconDataBarValue val, JsonElement t)
+            {
+                if (t.TryGetProperty("type", out var z2)) val.Type = ToEnum<eExcelConditionalFormattingValueObjectType>(z2);
+                if (t.TryGetProperty("gte", out z2)) val.GreaterThanOrEqualTo = z2.GetBoolean();
+                if (t.TryGetProperty("value", out z2)) val.Value = z2.GetDouble();
+                if (t.TryGetProperty("formula", out z2)) val.Formula = z2.GetString();
+            }
+
+            IExcelConditionalFormattingWithStdDev stdDev = null;
+            IExcelConditionalFormattingWithText text = null;
+            IExcelConditionalFormattingWithFormula formula = null;
+            IExcelConditionalFormattingWithFormula2 formula2 = null;
+            IExcelConditionalFormattingWithRank rank = null;
+            IExcelConditionalFormattingRule rule;
+            switch (formattingKind)
+            {
+                case ConditionalFormattingKind.AboveAverage: rule = formatting.AddAboveAverage(ruleAddress); break;
+                case ConditionalFormattingKind.AboveOrEqualAverage: rule = formatting.AddAboveOrEqualAverage(ruleAddress); break;
+                case ConditionalFormattingKind.AboveStdDev: rule = formatting.AddAboveStdDev(ruleAddress); stdDev = (IExcelConditionalFormattingWithStdDev)rule; break;
+                case ConditionalFormattingKind.BeginsWith: rule = formatting.AddBeginsWith(ruleAddress); text = (IExcelConditionalFormattingWithText)rule; break;
+                case ConditionalFormattingKind.BelowAverage: rule = formatting.AddBelowAverage(ruleAddress); break;
+                case ConditionalFormattingKind.BelowOrEqualAverage: rule = formatting.AddBelowOrEqualAverage(ruleAddress); break;
+                case ConditionalFormattingKind.BelowStdDev: rule = formatting.AddBelowStdDev(ruleAddress); stdDev = (IExcelConditionalFormattingWithStdDev)rule; break;
+                case ConditionalFormattingKind.Between: rule = formatting.AddBetween(ruleAddress); formula = (IExcelConditionalFormattingWithFormula)rule; formula2 = (IExcelConditionalFormattingWithFormula2)rule; break;
+                case ConditionalFormattingKind.Bottom: rule = formatting.AddBottom(ruleAddress); rank = (IExcelConditionalFormattingWithRank)rule; break;
+                case ConditionalFormattingKind.BottomPercent: rule = formatting.AddBottomPercent(ruleAddress); rank = (IExcelConditionalFormattingWithRank)rule; break;
+                case ConditionalFormattingKind.ContainsBlanks: rule = formatting.AddContainsBlanks(ruleAddress); break;
+                case ConditionalFormattingKind.ContainsErrors: rule = formatting.AddContainsErrors(ruleAddress); break;
+                case ConditionalFormattingKind.ContainsText: rule = formatting.AddContainsText(ruleAddress); text = (IExcelConditionalFormattingWithText)rule; break;
+                case ConditionalFormattingKind.Databar:
+                    {
+                        var r = formatting.AddDatabar(ruleAddress, token.TryGetProperty("showValue", out var z2) ? ToStaticEnum<Color>(z2.GetString()) : Color.Yellow); rule = r;
+                        if (token.TryGetProperty("showValue", out z2)) r.ShowValue = z2.GetBoolean();
+                        if (token.TryGetProperty("low", out z2)) ApplyIconDataBar(r.LowValue, z2);
+                        if (token.TryGetProperty("high", out z2)) ApplyIconDataBar(r.HighValue, z2);
+                    }
+                    break;
+                case ConditionalFormattingKind.DuplicateValues: rule = formatting.AddDuplicateValues(ruleAddress); break;
+                case ConditionalFormattingKind.EndsWith: rule = formatting.AddEndsWith(ruleAddress); text = (IExcelConditionalFormattingWithText)rule; break;
+                case ConditionalFormattingKind.Equal: rule = formatting.AddEqual(ruleAddress); formula = (IExcelConditionalFormattingWithFormula)rule; break;
+                case ConditionalFormattingKind.Expression: rule = formatting.AddExpression(ruleAddress); formula = (IExcelConditionalFormattingWithFormula)rule; break;
+                case ConditionalFormattingKind.FiveIconSet:
+                    {
+                        var r = formatting.AddFiveIconSet(ruleAddress, eExcelconditionalFormatting5IconsSetType.Arrows); rule = r;
+                        if (token.TryGetProperty("reverse", out var z2)) r.Reverse = z2.GetBoolean();
+                        if (token.TryGetProperty("showValue", out z2)) r.ShowValue = z2.GetBoolean();
+                        if (token.TryGetProperty("icon1", out z2)) ApplyIconDataBar(r.Icon1, z2);
+                        if (token.TryGetProperty("icon2", out z2)) ApplyIconDataBar(r.Icon2, z2);
+                        if (token.TryGetProperty("icon3", out z2)) ApplyIconDataBar(r.Icon3, z2);
+                        if (token.TryGetProperty("icon4", out z2)) ApplyIconDataBar(r.Icon4, z2);
+                        if (token.TryGetProperty("icon5", out z2)) ApplyIconDataBar(r.Icon5, z2);
+                    }
+                    break;
+                case ConditionalFormattingKind.FourIconSet:
+                    {
+                        var r = formatting.AddFourIconSet(ruleAddress, eExcelconditionalFormatting4IconsSetType.Arrows); rule = r;
+                        if (token.TryGetProperty("reverse", out var z2)) r.Reverse = z2.GetBoolean();
+                        if (token.TryGetProperty("showValue", out z2)) r.ShowValue = z2.GetBoolean();
+                        if (token.TryGetProperty("icon1", out z2)) ApplyIconDataBar(r.Icon1, z2);
+                        if (token.TryGetProperty("icon2", out z2)) ApplyIconDataBar(r.Icon2, z2);
+                        if (token.TryGetProperty("icon3", out z2)) ApplyIconDataBar(r.Icon3, z2);
+                        if (token.TryGetProperty("icon4", out z2)) ApplyIconDataBar(r.Icon4, z2);
+                    }
+                    break;
+                case ConditionalFormattingKind.GreaterThan: rule = formatting.AddGreaterThan(ruleAddress); formula = (IExcelConditionalFormattingWithFormula)rule; break;
+                case ConditionalFormattingKind.GreaterThanOrEqual: rule = formatting.AddGreaterThanOrEqual(ruleAddress); formula = (IExcelConditionalFormattingWithFormula)rule; break;
+                case ConditionalFormattingKind.Last7Days: rule = formatting.AddLast7Days(ruleAddress); break;
+                case ConditionalFormattingKind.LastMonth: rule = formatting.AddLastMonth(ruleAddress); break;
+                case ConditionalFormattingKind.LastWeek: rule = formatting.AddLastWeek(ruleAddress); break;
+                case ConditionalFormattingKind.LessThan: rule = formatting.AddLessThan(ruleAddress); formula = (IExcelConditionalFormattingWithFormula)rule; break;
+                case ConditionalFormattingKind.LessThanOrEqual: rule = formatting.AddLessThanOrEqual(ruleAddress); formula = (IExcelConditionalFormattingWithFormula)rule; break;
+                case ConditionalFormattingKind.NextMonth: rule = formatting.AddNextMonth(ruleAddress); break;
+                case ConditionalFormattingKind.NextWeek: rule = formatting.AddNextWeek(ruleAddress); break;
+                case ConditionalFormattingKind.NotBetween: rule = formatting.AddNotBetween(ruleAddress); formula = (IExcelConditionalFormattingWithFormula)rule; formula2 = (IExcelConditionalFormattingWithFormula2)rule; break;
+                case ConditionalFormattingKind.NotContainsBlanks: rule = formatting.AddNotContainsBlanks(ruleAddress); break;
+                case ConditionalFormattingKind.NotContainsErrors: rule = formatting.AddNotContainsErrors(ruleAddress); break;
+                case ConditionalFormattingKind.NotContainsText: rule = formatting.AddNotContainsText(ruleAddress); text = (IExcelConditionalFormattingWithText)rule; break;
+                case ConditionalFormattingKind.NotEqual: rule = formatting.AddNotEqual(ruleAddress); formula = (IExcelConditionalFormattingWithFormula)rule; break;
+                case ConditionalFormattingKind.ThisMonth: rule = formatting.AddThisMonth(ruleAddress); break;
+                case ConditionalFormattingKind.ThisWeek: rule = formatting.AddThisWeek(ruleAddress); break;
+                case ConditionalFormattingKind.ThreeColorScale:
+                    {
+                        var r = formatting.AddThreeColorScale(ruleAddress); rule = r;
+                        if (token.TryGetProperty("low", out var z2)) ApplyColorScale(r.LowValue, z2);
+                        if (token.TryGetProperty("high", out z2)) ApplyColorScale(r.HighValue, z2);
+                        if (token.TryGetProperty("middle", out z2)) ApplyColorScale(r.MiddleValue, z2);
+                    }
+                    break;
+                case ConditionalFormattingKind.ThreeIconSet:
+                    {
+                        var r = formatting.AddThreeIconSet(ruleAddress, eExcelconditionalFormatting3IconsSetType.Arrows); rule = r;
+                        if (token.TryGetProperty("reverse", out var z2)) r.Reverse = z2.GetBoolean();
+                        if (token.TryGetProperty("showValue", out z2)) r.ShowValue = z2.GetBoolean();
+                        if (token.TryGetProperty("icon1", out z2)) ApplyIconDataBar(r.Icon1, z2);
+                        if (token.TryGetProperty("icon2", out z2)) ApplyIconDataBar(r.Icon2, z2);
+                        if (token.TryGetProperty("icon3", out z2)) ApplyIconDataBar(r.Icon3, z2);
+                    }
+                    break;
+                case ConditionalFormattingKind.Today: rule = formatting.AddToday(ruleAddress); break;
+                case ConditionalFormattingKind.Tomorrow: rule = formatting.AddTomorrow(ruleAddress); break;
+                case ConditionalFormattingKind.Top: rule = formatting.AddTop(ruleAddress); rank = (IExcelConditionalFormattingWithRank)rule; break;
+                case ConditionalFormattingKind.TopPercent: rule = formatting.AddTopPercent(ruleAddress); rank = (IExcelConditionalFormattingWithRank)rule; break;
+                case ConditionalFormattingKind.TwoColorScale:
+                    {
+                        var r = formatting.AddTwoColorScale(ruleAddress); rule = r;
+                        if (token.TryGetProperty("low", out var z2)) ApplyColorScale(r.LowValue, z2);
+                        if (token.TryGetProperty("high", out z2)) ApplyColorScale(r.HighValue, z2);
+                    }
+                    break;
+                case ConditionalFormattingKind.UniqueValues: rule = formatting.AddUniqueValues(ruleAddress); break;
+                case ConditionalFormattingKind.Yesterday: rule = formatting.AddYesterday(ruleAddress); break;
+                default: throw new ArgumentOutOfRangeException(nameof(formattingKind));
+            }
+            // CUSTOM
+            if (stdDev != null && token.TryGetProperty("stdDev", out var z)) stdDev.StdDev = z.GetUInt16();
+            if (text != null && token.TryGetProperty("text", out z)) text.Text = z.GetString();
+            if (formula != null && token.TryGetProperty("formula", out z)) formula.Formula = z.GetString();
+            if (formula2 != null && token.TryGetProperty("formula2", out z)) formula2.Formula2 = z.GetString();
+            if (rank != null && token.TryGetProperty("rank", out z)) rank.Rank = z.GetUInt16();
+            // RULE
+            if (priority != null) rule.Priority = priority.Value;
+            rule.StopIfTrue = stopIfTrue;
+            if (token.TryGetProperty("styles", out z))
+            {
+                var styles =
+                    z.ValueKind == JsonValueKind.String ? new[] { z.GetString() } :
+                    z.ValueKind == JsonValueKind.Array ? z.EnumerateArray().Select(x => x.GetString()) :
+                    throw new ArgumentOutOfRangeException("token.styles", z.ToString());
+                foreach (var style in styles)
+                    ApplyStyle(style, null, rule.Style);
+            }
+        }
+
+        static ExcelDrawing ApplyDrawing(string name, JsonElement token, ExcelDrawings drawings, DrawingKind drawingKind)
+        {
+            // image
+            Image ParseImage(JsonElement t) => null;
+
             // parsing base
             void ApplyDrawingBorder(ExcelDrawingBorder val, JsonElement t)
             {
@@ -474,543 +1509,114 @@ namespace ExcelTrans
             }
 
             // drawings
-            var drawings = ((ExcelContext)ctx).WS.Drawings;
-            var token = JsonDocument.Parse(value is string @string ? @string : JsonSerializer.Serialize(value)).RootElement;
-            ExcelDrawing drawing;
             switch (drawingKind)
             {
                 case DrawingKind.AddChart:
                     {
                         var chartType = token.TryGetProperty("type", out var z2) ? ToEnum<eChartType>(z2) : eChartType.Pie;
                         var pivotTableSource = token.TryGetProperty("pivotTableSource", out z2) ? ParsePivotTable(z2) : null;
-                        if (pivotTableSource == null) drawing = ApplyChart(drawings.AddChart(name, chartType), token);
-                        else drawing = ApplyChart(drawings.AddChart(name, chartType, pivotTableSource), token);
+                        if (pivotTableSource == null) return ApplyChart(drawings.AddChart(name, chartType), token);
+                        else return ApplyChart(drawings.AddChart(name, chartType, pivotTableSource), token);
                     }
-                    break;
                 case DrawingKind.AddPicture:
                     {
                         var image = token.TryGetProperty("image", out var z2) ? ParseImage(z2) : null;
                         var hyperlink = token.TryGetProperty("hyperlink", out z2) ? new Uri(z2.GetString()) : null;
-                        if (hyperlink == null) drawing = ApplyPicture(drawings.AddPicture(name, image), token);
-                        else drawing = ApplyPicture(drawings.AddPicture(name, image, hyperlink), token);
+                        if (hyperlink == null) return ApplyPicture(drawings.AddPicture(name, image), token);
+                        else return ApplyPicture(drawings.AddPicture(name, image, hyperlink), token);
                     }
-                    break;
                 case DrawingKind.AddShape:
                     {
                         var style = token.TryGetProperty("style", out var z2) ? (eShapeStyle?)ToEnum<eShapeStyle>(z2) : null;
-                        if (style == null) return;
-                        drawing = ApplyShape(drawings.AddShape(name, style.Value), token);
+                        if (style == null) return null;
+                        return ApplyShape(drawings.AddShape(name, style.Value), token);
                     }
-                    break;
-                case DrawingKind.Clear: drawings.Clear(); return;
-                case DrawingKind.Remove: drawings.Remove(name); return;
+                case DrawingKind.Clear: drawings.Clear(); return null;
+                case DrawingKind.Remove: drawings.Remove(name); return null;
                 default: throw new ArgumentOutOfRangeException(nameof(drawingKind));
             }
-
-            // address
-            if (string.IsNullOrEmpty(address))
-                return;
-            var range = ctx.Get(address);
-            if (!token.TryGetProperty("from", out var _))
-            {
-                drawing.From.Column = range.Start.Column;
-                drawing.From.Row = range.Start.Row;
-            }
-            if (!token.TryGetProperty("to", out var _))
-            {
-                drawing.To.Column = range.End.Column + 1;
-                drawing.To.Row = range.End.Row + 1;
-            }
         }
 
-        public static void ViewAction(this IExcelContext ctx, object value, ViewActionKind actionKind)
+        static void ApplyStyle(string style, ExcelStyle excelStyle, ExcelDxfStyleConditionalFormatting excelDxfStyle)
         {
-            var view = ((ExcelContext)ctx).WS.View;
-            switch (actionKind)
+            string NumberformatPrec(string prec, string defaultPrec) => string.IsNullOrEmpty(prec) ? defaultPrec : $"0.{new string('0', int.Parse(prec))}";
+
+            ExcelVerticalAlignmentFont ParseVerticalAlignmentFont(string value)
             {
-                case ViewActionKind.FreezePane: ExcelService.CellToInts((string)value, out var row, out var col); view.FreezePanes(row, col); break;
-                case ViewActionKind.SetTabSelected: view.SetTabSelected(); break;
-                case ViewActionKind.UnfreezePane: view.UnFreezePanes(); break;
-                default: throw new ArgumentOutOfRangeException(nameof(actionKind));
-            }
-        }
-
-        public static void Protection(this IExcelContext ctx, object value, WorkbookProtectionKind protectionKind)
-        {
-            var protection = ((ExcelContext)ctx).WS.Protection;
-        }
-
-        public static void ConditionalFormatting(this IExcelContext ctx, int row, int col, object value, ConditionalFormattingKind formattingKind, int? priority, bool stopIfTrue) => ConditionalFormatting(ctx, ExcelService.GetAddress(row, col), value, formattingKind, priority, stopIfTrue);
-        public static void ConditionalFormatting(this IExcelContext ctx, int fromRow, int fromCol, int toRow, int toCol, object value, ConditionalFormattingKind formattingKind, int? priority, bool stopIfTrue) => ConditionalFormatting(ctx, ExcelService.GetAddress(fromRow, fromCol, toRow, toCol), value, formattingKind, priority, stopIfTrue);
-        public static void ConditionalFormatting(this IExcelContext ctx, Address r, object value, ConditionalFormattingKind formattingKind, int? priority, bool stopIfTrue) => ConditionalFormatting(ctx, ExcelService.GetAddress(r, 0, 0), value, formattingKind, priority, stopIfTrue);
-        public static void ConditionalFormatting(this IExcelContext ctx, Address r, int row, int col, object value, ConditionalFormattingKind formattingKind, int? priority, bool stopIfTrue) => ConditionalFormatting(ctx, ExcelService.GetAddress(r, row, col), value, formattingKind, priority, stopIfTrue);
-        public static void ConditionalFormatting(this IExcelContext ctx, Address r, int fromRow, int fromCol, int toRow, int toCol, object value, ConditionalFormattingKind formattingKind, int? priority, bool stopIfTrue) => ConditionalFormatting(ctx, ExcelService.GetAddress(r, fromRow, fromCol, toRow, toCol), value, formattingKind, priority, stopIfTrue);
-        public static void ConditionalFormatting(this IExcelContext ctx, string address, object value, ConditionalFormattingKind formattingKind, int? priority, bool stopIfTrue)
-        {
-            void ApplyColorScale(ExcelConditionalFormattingColorScaleValue val, JsonElement t)
-            {
-                if (t.TryGetProperty("type", out var z2)) val.Type = ToEnum<eExcelConditionalFormattingValueObjectType>(z2);
-                if (t.TryGetProperty("color", out z2)) val.Color = ParseColor(z2.GetString(), Color.White);
-                if (t.TryGetProperty("value", out z2)) val.Value = z2.GetDouble();
-                if (t.TryGetProperty("formula", out z2)) val.Formula = z2.GetString();
-            }
-            void ApplyIconDataBar(ExcelConditionalFormattingIconDataBarValue val, JsonElement t)
-            {
-                if (t.TryGetProperty("type", out var z2)) val.Type = ToEnum<eExcelConditionalFormattingValueObjectType>(z2);
-                if (t.TryGetProperty("gte", out z2)) val.GreaterThanOrEqualTo = z2.GetBoolean();
-                if (t.TryGetProperty("value", out z2)) val.Value = z2.GetDouble();
-                if (t.TryGetProperty("formula", out z2)) val.Formula = z2.GetString();
-            }
-            if (value == null)
-                throw new ArgumentNullException(nameof(value));
-
-            var token = JsonDocument.Parse(value is string @string ? @string : JsonSerializer.Serialize(value)).RootElement;
-            var formatting = ((ExcelContext)ctx).WS.ConditionalFormatting;
-            var ruleAddress = new ExcelAddress(ctx.DecodeAddress(address));
-            IExcelConditionalFormattingWithStdDev stdDev = null;
-            IExcelConditionalFormattingWithText text = null;
-            IExcelConditionalFormattingWithFormula formula = null;
-            IExcelConditionalFormattingWithFormula2 formula2 = null;
-            IExcelConditionalFormattingWithRank rank = null;
-            IExcelConditionalFormattingRule rule;
-            switch (formattingKind)
-            {
-                case ConditionalFormattingKind.AboveAverage: rule = formatting.AddAboveAverage(ruleAddress); break;
-                case ConditionalFormattingKind.AboveOrEqualAverage: rule = formatting.AddAboveOrEqualAverage(ruleAddress); break;
-                case ConditionalFormattingKind.AboveStdDev: rule = formatting.AddAboveStdDev(ruleAddress); stdDev = (IExcelConditionalFormattingWithStdDev)rule; break;
-                case ConditionalFormattingKind.BeginsWith: rule = formatting.AddBeginsWith(ruleAddress); text = (IExcelConditionalFormattingWithText)rule; break;
-                case ConditionalFormattingKind.BelowAverage: rule = formatting.AddBelowAverage(ruleAddress); break;
-                case ConditionalFormattingKind.BelowOrEqualAverage: rule = formatting.AddBelowOrEqualAverage(ruleAddress); break;
-                case ConditionalFormattingKind.BelowStdDev: rule = formatting.AddBelowStdDev(ruleAddress); stdDev = (IExcelConditionalFormattingWithStdDev)rule; break;
-                case ConditionalFormattingKind.Between: rule = formatting.AddBetween(ruleAddress); formula = (IExcelConditionalFormattingWithFormula)rule; formula2 = (IExcelConditionalFormattingWithFormula2)rule; break;
-                case ConditionalFormattingKind.Bottom: rule = formatting.AddBottom(ruleAddress); rank = (IExcelConditionalFormattingWithRank)rule; break;
-                case ConditionalFormattingKind.BottomPercent: rule = formatting.AddBottomPercent(ruleAddress); rank = (IExcelConditionalFormattingWithRank)rule; break;
-                case ConditionalFormattingKind.ContainsBlanks: rule = formatting.AddContainsBlanks(ruleAddress); break;
-                case ConditionalFormattingKind.ContainsErrors: rule = formatting.AddContainsErrors(ruleAddress); break;
-                case ConditionalFormattingKind.ContainsText: rule = formatting.AddContainsText(ruleAddress); text = (IExcelConditionalFormattingWithText)rule; break;
-                case ConditionalFormattingKind.Databar:
-                    {
-                        var r = formatting.AddDatabar(ruleAddress, token.TryGetProperty("showValue", out var z2) ? ToStaticEnum<Color>(z2.GetString()) : Color.Yellow); rule = r;
-                        if (token.TryGetProperty("showValue", out z2)) r.ShowValue = z2.GetBoolean();
-                        if (token.TryGetProperty("low", out z2)) ApplyIconDataBar(r.LowValue, z2);
-                        if (token.TryGetProperty("high", out z2)) ApplyIconDataBar(r.HighValue, z2);
-                    }
-                    break;
-                case ConditionalFormattingKind.DuplicateValues: rule = formatting.AddDuplicateValues(ruleAddress); break;
-                case ConditionalFormattingKind.EndsWith: rule = formatting.AddEndsWith(ruleAddress); text = (IExcelConditionalFormattingWithText)rule; break;
-                case ConditionalFormattingKind.Equal: rule = formatting.AddEqual(ruleAddress); formula = (IExcelConditionalFormattingWithFormula)rule; break;
-                case ConditionalFormattingKind.Expression: rule = formatting.AddExpression(ruleAddress); formula = (IExcelConditionalFormattingWithFormula)rule; break;
-                case ConditionalFormattingKind.FiveIconSet:
-                    {
-                        var r = formatting.AddFiveIconSet(ruleAddress, eExcelconditionalFormatting5IconsSetType.Arrows); rule = r;
-                        if (token.TryGetProperty("reverse", out var z2)) r.Reverse = z2.GetBoolean();
-                        if (token.TryGetProperty("showValue", out z2)) r.ShowValue = z2.GetBoolean();
-                        if (token.TryGetProperty("icon1", out z2)) ApplyIconDataBar(r.Icon1, z2);
-                        if (token.TryGetProperty("icon2", out z2)) ApplyIconDataBar(r.Icon2, z2);
-                        if (token.TryGetProperty("icon3", out z2)) ApplyIconDataBar(r.Icon3, z2);
-                        if (token.TryGetProperty("icon4", out z2)) ApplyIconDataBar(r.Icon4, z2);
-                        if (token.TryGetProperty("icon5", out z2)) ApplyIconDataBar(r.Icon5, z2);
-                    }
-                    break;
-                case ConditionalFormattingKind.FourIconSet:
-                    {
-                        var r = formatting.AddFourIconSet(ruleAddress, eExcelconditionalFormatting4IconsSetType.Arrows); rule = r;
-                        if (token.TryGetProperty("reverse", out var z2)) r.Reverse = z2.GetBoolean();
-                        if (token.TryGetProperty("showValue", out z2)) r.ShowValue = z2.GetBoolean();
-                        if (token.TryGetProperty("icon1", out z2)) ApplyIconDataBar(r.Icon1, z2);
-                        if (token.TryGetProperty("icon2", out z2)) ApplyIconDataBar(r.Icon2, z2);
-                        if (token.TryGetProperty("icon3", out z2)) ApplyIconDataBar(r.Icon3, z2);
-                        if (token.TryGetProperty("icon4", out z2)) ApplyIconDataBar(r.Icon4, z2);
-                    }
-                    break;
-                case ConditionalFormattingKind.GreaterThan: rule = formatting.AddGreaterThan(ruleAddress); formula = (IExcelConditionalFormattingWithFormula)rule; break;
-                case ConditionalFormattingKind.GreaterThanOrEqual: rule = formatting.AddGreaterThanOrEqual(ruleAddress); formula = (IExcelConditionalFormattingWithFormula)rule; break;
-                case ConditionalFormattingKind.Last7Days: rule = formatting.AddLast7Days(ruleAddress); break;
-                case ConditionalFormattingKind.LastMonth: rule = formatting.AddLastMonth(ruleAddress); break;
-                case ConditionalFormattingKind.LastWeek: rule = formatting.AddLastWeek(ruleAddress); break;
-                case ConditionalFormattingKind.LessThan: rule = formatting.AddLessThan(ruleAddress); formula = (IExcelConditionalFormattingWithFormula)rule; break;
-                case ConditionalFormattingKind.LessThanOrEqual: rule = formatting.AddLessThanOrEqual(ruleAddress); formula = (IExcelConditionalFormattingWithFormula)rule; break;
-                case ConditionalFormattingKind.NextMonth: rule = formatting.AddNextMonth(ruleAddress); break;
-                case ConditionalFormattingKind.NextWeek: rule = formatting.AddNextWeek(ruleAddress); break;
-                case ConditionalFormattingKind.NotBetween: rule = formatting.AddNotBetween(ruleAddress); formula = (IExcelConditionalFormattingWithFormula)rule; formula2 = (IExcelConditionalFormattingWithFormula2)rule; break;
-                case ConditionalFormattingKind.NotContainsBlanks: rule = formatting.AddNotContainsBlanks(ruleAddress); break;
-                case ConditionalFormattingKind.NotContainsErrors: rule = formatting.AddNotContainsErrors(ruleAddress); break;
-                case ConditionalFormattingKind.NotContainsText: rule = formatting.AddNotContainsText(ruleAddress); text = (IExcelConditionalFormattingWithText)rule; break;
-                case ConditionalFormattingKind.NotEqual: rule = formatting.AddNotEqual(ruleAddress); formula = (IExcelConditionalFormattingWithFormula)rule; break;
-                case ConditionalFormattingKind.ThisMonth: rule = formatting.AddThisMonth(ruleAddress); break;
-                case ConditionalFormattingKind.ThisWeek: rule = formatting.AddThisWeek(ruleAddress); break;
-                case ConditionalFormattingKind.ThreeColorScale:
-                    {
-                        var r = formatting.AddThreeColorScale(ruleAddress); rule = r;
-                        if (token.TryGetProperty("low", out var z2)) ApplyColorScale(r.LowValue, z2);
-                        if (token.TryGetProperty("high", out z2)) ApplyColorScale(r.HighValue, z2);
-                        if (token.TryGetProperty("middle", out z2)) ApplyColorScale(r.MiddleValue, z2);
-                    }
-                    break;
-                case ConditionalFormattingKind.ThreeIconSet:
-                    {
-                        var r = formatting.AddThreeIconSet(ruleAddress, eExcelconditionalFormatting3IconsSetType.Arrows); rule = r;
-                        if (token.TryGetProperty("reverse", out var z2)) r.Reverse = z2.GetBoolean();
-                        if (token.TryGetProperty("showValue", out z2)) r.ShowValue = z2.GetBoolean();
-                        if (token.TryGetProperty("icon1", out z2)) ApplyIconDataBar(r.Icon1, z2);
-                        if (token.TryGetProperty("icon2", out z2)) ApplyIconDataBar(r.Icon2, z2);
-                        if (token.TryGetProperty("icon3", out z2)) ApplyIconDataBar(r.Icon3, z2);
-                    }
-                    break;
-                case ConditionalFormattingKind.Today: rule = formatting.AddToday(ruleAddress); break;
-                case ConditionalFormattingKind.Tomorrow: rule = formatting.AddTomorrow(ruleAddress); break;
-                case ConditionalFormattingKind.Top: rule = formatting.AddTop(ruleAddress); rank = (IExcelConditionalFormattingWithRank)rule; break;
-                case ConditionalFormattingKind.TopPercent: rule = formatting.AddTopPercent(ruleAddress); rank = (IExcelConditionalFormattingWithRank)rule; break;
-                case ConditionalFormattingKind.TwoColorScale:
-                    {
-                        var r = formatting.AddTwoColorScale(ruleAddress); rule = r;
-                        if (token.TryGetProperty("low", out var z2)) ApplyColorScale(r.LowValue, z2);
-                        if (token.TryGetProperty("high", out z2)) ApplyColorScale(r.HighValue, z2);
-                    }
-                    break;
-                case ConditionalFormattingKind.UniqueValues: rule = formatting.AddUniqueValues(ruleAddress); break;
-                case ConditionalFormattingKind.Yesterday: rule = formatting.AddYesterday(ruleAddress); break;
-                default: throw new ArgumentOutOfRangeException(nameof(formattingKind));
-            }
-            // CUSTOM
-            if (stdDev != null && token.TryGetProperty("stdDev", out var z)) stdDev.StdDev = z.GetUInt16();
-            if (text != null && token.TryGetProperty("text", out z)) text.Text = z.GetString();
-            if (formula != null && token.TryGetProperty("formula", out z)) formula.Formula = z.GetString();
-            if (formula2 != null && token.TryGetProperty("formula2", out z)) formula2.Formula2 = z.GetString();
-            if (rank != null && token.TryGetProperty("rank", out z)) rank.Rank = z.GetUInt16();
-            // RULE
-            if (priority != null) rule.Priority = priority.Value;
-            rule.StopIfTrue = stopIfTrue;
-            if (token.TryGetProperty("styles", out z))
-            {
-                var styles =
-                    z.ValueKind == JsonValueKind.String ? new[] { z.GetString() } :
-                    z.ValueKind == JsonValueKind.Array ? z.EnumerateArray().Select(x => x.GetString()) :
-                    null;
-                if (styles != null)
-                    foreach (var style in styles)
-                        ApplyCellStyle(style, null, rule.Style);
-            }
-        }
-
-        #endregion
-
-        #region Cell
-
-        public static void CellStyle(this IExcelContext ctx, int row, int col, params string[] styles) => CellStyle(ctx, ExcelService.GetAddress(row, col), styles);
-        public static void CellStyle(this IExcelContext ctx, int fromRow, int fromCol, int toRow, int toCol, params string[] styles) => CellStyle(ctx, ExcelService.GetAddress(fromRow, fromCol, toRow, toCol), styles);
-        public static void CellStyle(this IExcelContext ctx, Address r, params string[] styles) => CellStyle(ctx, ExcelService.GetAddress(r, 0, 0), styles);
-        public static void CellStyle(this IExcelContext ctx, Address r, int row, int col, params string[] styles) => CellStyle(ctx, ExcelService.GetAddress(r, row, col), styles);
-        public static void CellStyle(this IExcelContext ctx, Address r, int fromRow, int fromCol, int toRow, int toCol, params string[] styles) => CellStyle(ctx, ExcelService.GetAddress(r, fromRow, fromCol, toRow, toCol), styles);
-        public static void CellStyle(this IExcelContext ctx, string cells, string[] styles)
-        {
-            var range = ctx.Get(cells);
-            foreach (var style in styles)
-                ApplyCellStyle(style, range.Style, null);
-        }
-
-        public static void CellValidation(this IExcelContext ctx, DataValidationKind validationKind, int row, int col, params string[] rules) => CellValidation(ctx, validationKind, ExcelService.GetAddress(row, col), rules);
-        public static void CellValidation(this IExcelContext ctx, DataValidationKind validationKind, int fromRow, int fromCol, int toRow, int toCol, params string[] rules) => CellValidation(ctx, validationKind, ExcelService.GetAddress(fromRow, fromCol, toRow, toCol), rules);
-        public static void CellValidation(this IExcelContext ctx, DataValidationKind validationKind, Address r, params string[] rules) => CellValidation(ctx, validationKind, ExcelService.GetAddress(r, 0, 0), rules);
-        public static void CellValidation(this IExcelContext ctx, DataValidationKind validationKind, Address r, int row, int col, params string[] rules) => CellValidation(ctx, validationKind, ExcelService.GetAddress(r, row, col), rules);
-        public static void CellValidation(this IExcelContext ctx, DataValidationKind validationKind, Address r, int fromRow, int fromCol, int toRow, int toCol, params string[] rules) => CellValidation(ctx, validationKind, ExcelService.GetAddress(r, fromRow, fromCol, toRow, toCol), rules);
-        public static void CellValidation(this IExcelContext ctx, DataValidationKind validationKind, string cells, string[] rules)
-        {
-            var validations = ((ExcelContext)ctx).WS.DataValidations;
-            IExcelDataValidation validation;
-            switch (validationKind)
-            {
-                case DataValidationKind.Find: validation = validations.Find(x => x.Address.Address == cells); break;
-                case DataValidationKind.AnyValidation: validation = validations.AddAnyValidation(cells); break;
-                case DataValidationKind.CustomValidation: validation = validations.AddCustomValidation(cells); break;
-                case DataValidationKind.DateTimeValidation: validation = validations.AddDateTimeValidation(cells); break;
-                case DataValidationKind.DecimalValidation: validation = validations.AddDecimalValidation(cells); break;
-                case DataValidationKind.IntegerValidation: validation = validations.AddIntegerValidation(cells); break;
-                case DataValidationKind.ListValidation: validation = validations.AddListValidation(cells); break;
-                case DataValidationKind.TextValidation: validation = validations.AddTextLengthValidation(cells); break;
-                case DataValidationKind.TimeValidation: validation = validations.AddTimeValidation(cells); break;
-                default: throw new ArgumentOutOfRangeException(nameof(validationKind));
-            }
-            foreach (var rule in rules)
-                ApplyCellValidation(rule, validation);
-        }
-
-        public static void CellValue(this IExcelContext ctx, int row, int col, object value, CellValueKind valueKind = CellValueKind.Value) => ctx.CellValue(ExcelService.GetAddress(row, col), value, valueKind);
-        public static void CellValue(this IExcelContext ctx, int fromRow, int fromCol, int toRow, int toCol, object value, CellValueKind valueKind = CellValueKind.Value) => ctx.CellValue(ExcelService.GetAddress(fromRow, fromCol, toRow, toCol), value, valueKind);
-        public static void CellValue(this IExcelContext ctx, Address r, object value, CellValueKind valueKind = CellValueKind.Value) => ctx.CellValue(ExcelService.GetAddress(r, 0, 0), value, valueKind);
-        public static void CellValue(this IExcelContext ctx, Address r, int row, int col, object value, CellValueKind valueKind = CellValueKind.Value) => ctx.CellValue(ExcelService.GetAddress(r, row, col), value, valueKind);
-        public static void CellValue(this IExcelContext ctx, Address r, int fromRow, int fromCol, int toRow, int toCol, object value, CellValueKind valueKind = CellValueKind.Value) => ctx.CellValue(ExcelService.GetAddress(r, fromRow, fromCol, toRow, toCol), value, valueKind);
-        public static void CellValue(this IExcelContext ctx, string cells, object value, CellValueKind valueKind = CellValueKind.Value)
-        {
-            var range = ctx.Get(cells);
-            var values = value == null || !(value is Array array) ? new[] { value } : array;
-            foreach (var val in values)
-            {
-                switch (valueKind)
+                if (char.IsDigit(value[0])) return (ExcelVerticalAlignmentFont)int.Parse(value);
+                switch (value.ToLowerInvariant())
                 {
-                    case CellValueKind.Text:
-                    case CellValueKind.Value: range.Value = val; break;
-                    case CellValueKind.AutoFilter: range.AutoFilter = val.CastValue<bool>(); break;
-                    case CellValueKind.AutoFitColumns: range.AutoFitColumns(); break;
-                    case CellValueKind.Comment: range.Comment.Text = (string)val; break;
-                    case CellValueKind.CommentMore: break;
-                    case CellValueKind.ConditionalFormattingMore: break;
-                    case CellValueKind.Copy: var range2 = ((ExcelContext)ctx).WS.Cells[ctx.DecodeAddress((string)val)]; range.Copy(range2); break;
-                    case CellValueKind.Formula: range.Formula = (string)val; break;
-                    case CellValueKind.FormulaR1C1: range.FormulaR1C1 = (string)val; break;
-                    case CellValueKind.Hyperlink: range.Hyperlink = new Uri((string)val); break;
-                    case CellValueKind.Merge: range.Merge = val.CastValue<bool>(); break;
-                    case CellValueKind.RichText: range.RichText.Add((string)val); break;
-                    case CellValueKind.RichTextClear: range.RichText.Clear(); break;
-                    case CellValueKind.StyleName: range.StyleName = (string)val; break;
-                    // validation
-                    //case CellValueKind.DataValidation: range.DataValidation = v; break;
-                    default: throw new ArgumentOutOfRangeException(nameof(valueKind));
+                    case "none": return ExcelVerticalAlignmentFont.None;
+                    case "baseline": return ExcelVerticalAlignmentFont.Baseline;
+                    case "subscript": return ExcelVerticalAlignmentFont.Subscript;
+                    case "superscript": return ExcelVerticalAlignmentFont.Superscript;
+                    default: throw new ArgumentOutOfRangeException(nameof(value), value);
                 }
-                if (val is DateTime) range.Style.Numberformat.Format = DateTimeFormatInfo.CurrentInfo.ShortDatePattern;
-                range = ctx.Next(range);
             }
-        }
 
-        public static object GetCellValue(this IExcelContext ctx, int row, int col, CellValueKind valueKind = CellValueKind.Value) => ctx.GetCellValue(ExcelService.GetAddress(row, col), valueKind);
-        public static object GetCellValue(this IExcelContext ctx, int fromRow, int fromCol, int toRow, int toCol, CellValueKind valueKind = CellValueKind.Value) => ctx.GetCellValue(ExcelService.GetAddress(fromRow, fromCol, toRow, toCol), valueKind);
-        public static object GetCellValue(this IExcelContext ctx, Address r, CellValueKind valueKind = CellValueKind.Value) => ctx.GetCellValue(ExcelService.GetAddress(r, 0, 0), valueKind);
-        public static object GetCellValue(this IExcelContext ctx, Address r, int row, int col, CellValueKind valueKind = CellValueKind.Value) => ctx.GetCellValue(ExcelService.GetAddress(r, row, col), valueKind);
-        public static object GetCellValue(this IExcelContext ctx, Address r, int fromRow, int fromCol, int toRow, int toCol, CellValueKind valueKind = CellValueKind.Value) => ctx.GetCellValue(ExcelService.GetAddress(r, fromRow, fromCol, toRow, toCol), valueKind);
-        public static object GetCellValue(this IExcelContext ctx, string cells, CellValueKind valueKind = CellValueKind.Value)
-        {
-            var range = ctx.Get(cells);
-            switch (valueKind)
+            ExcelFillStyle ParseFillStyle(string value)
             {
-                case CellValueKind.Value: return range.Value;
-                case CellValueKind.Text: return range.Text;
-                case CellValueKind.AutoFilter: return range.AutoFilter;
-                case CellValueKind.Comment: return range.Comment.Text;
-                case CellValueKind.ConditionalFormattingMore: return null;
-                case CellValueKind.Formula: return range.Formula;
-                case CellValueKind.FormulaR1C1: return range.FormulaR1C1;
-                case CellValueKind.Hyperlink: return range.Hyperlink;
-                case CellValueKind.Merge: return range.Merge;
-                case CellValueKind.StyleName: return range.StyleName;
-                // validation
-                case CellValueKind.DataValidation: return range.DataValidation;
-                default: throw new ArgumentOutOfRangeException(nameof(valueKind));
-            }
-        }
-
-        #endregion
-
-        #region Column
-
-        public static void DeleteColumn(this IExcelContext ctx, int column) => ((ExcelContext)ctx).WS.DeleteColumn(column);
-        public static void DeleteColumn(this IExcelContext ctx, int columnFrom, int columns) => ((ExcelContext)ctx).WS.DeleteColumn(columnFrom, columns);
-
-        public static void InsertColumn(this IExcelContext ctx, int columnFrom, int columns) => ((ExcelContext)ctx).WS.InsertColumn(columnFrom, columns);
-        public static void InsertColumn(this IExcelContext ctx, int columnFrom, int columns, int copyStylesFromColumn) => ((ExcelContext)ctx).WS.InsertColumn(columnFrom, columns, copyStylesFromColumn);
-
-        public static void ColumnValue(this IExcelContext ctx, string col, object value, ColumnValueKind valueKind) => ColumnValue(ctx, ExcelService.ColToInt(col), value, valueKind);
-        public static void ColumnValue(this IExcelContext ctx, int col, object value, ColumnValueKind valueKind)
-        {
-            var column = ((ExcelContext)ctx).WS.Column(col);
-            var values = value == null || !(value is Array array) ? new[] { value } : array;
-            foreach (var val in values)
-            {
-                switch (valueKind)
+                if (char.IsDigit(value[0])) return (ExcelFillStyle)int.Parse(value);
+                switch (value.ToLowerInvariant())
                 {
-                    case ColumnValueKind.AutoFit: column.AutoFit(); break;
-                    case ColumnValueKind.BestFit: column.BestFit = val.CastValue<bool>(); break;
-                    case ColumnValueKind.Merged: column.Merged = val.CastValue<bool>(); break;
-                    case ColumnValueKind.Width: column.Width = val.CastValue<double>(); break;
-                    case ColumnValueKind.TrueWidth: column.SetTrueColumnWidth(val.CastValue<double>()); break;
-                    default: throw new ArgumentOutOfRangeException(nameof(valueKind));
+                    default: throw new ArgumentOutOfRangeException(nameof(value), value);
                 }
-                column = ctx.Next(column);
             }
-        }
 
-        public static object GetColumnValue(this IExcelContext ctx, string col, ColumnValueKind valueKind) => GetColumnValue(ctx, ExcelService.ColToInt(col), valueKind);
-        public static object GetColumnValue(this IExcelContext ctx, int col, ColumnValueKind valueKind)
-        {
-            var column = ((ExcelContext)ctx).WS.Column(col);
-            switch (valueKind)
+            ExcelBorderStyle ParseBorderStyle(string value)
             {
-                case ColumnValueKind.BestFit: return column.BestFit;
-                case ColumnValueKind.Merged: return column.Merged;
-                case ColumnValueKind.Width: return column.Width;
-                default: throw new ArgumentOutOfRangeException(nameof(valueKind));
-            }
-        }
-
-        #endregion
-
-        #region Row
-
-        public static void DeleteRow(this IExcelContext ctx, int row) => ((ExcelContext)ctx).WS.DeleteRow(row);
-        public static void DeleteRow(this IExcelContext ctx, int rowFrom, int rows) => ((ExcelContext)ctx).WS.DeleteRow(rowFrom, rows);
-
-        public static void InsertRow(this IExcelContext ctx, int rowFrom, int rows) => ((ExcelContext)ctx).WS.InsertRow(rowFrom, rows);
-        public static void InsertRow(this IExcelContext ctx, int rowFrom, int rows, int copyStylesFromRow) => ((ExcelContext)ctx).WS.InsertRow(rowFrom, rows, copyStylesFromRow);
-
-        public static void RowValue(this IExcelContext ctx, string row, object value, RowValueKind valueKind) => RowValue(ctx, ExcelService.RowToInt(row), value, valueKind);
-        public static void RowValue(this IExcelContext ctx, int row, object value, RowValueKind valueKind)
-        {
-            var row_ = ((ExcelContext)ctx).WS.Row(row);
-            var values = value == null || !(value is Array array) ? new[] { value } : array;
-            foreach (var val in values)
-            {
-                switch (valueKind)
+                if (char.IsDigit(value[0])) return (ExcelBorderStyle)int.Parse(value);
+                switch (value.ToLowerInvariant())
                 {
-                    case RowValueKind.Collapsed: row_.Collapsed = val.CastValue<bool>(); break;
-                    case RowValueKind.CustomHeight: row_.CustomHeight = val.CastValue<bool>(); break;
-                    case RowValueKind.Height: row_.Height = val.CastValue<double>(); break;
-                    case RowValueKind.Hidden: row_.Hidden = val.CastValue<bool>(); break;
-                    case RowValueKind.Merged: row_.Merged = val.CastValue<bool>(); break;
-                    case RowValueKind.OutlineLevel: row_.OutlineLevel = val.CastValue<int>(); break;
-                    case RowValueKind.PageBreak: row_.PageBreak = val.CastValue<bool>(); break;
-                    case RowValueKind.Phonetic: row_.Phonetic = val.CastValue<bool>(); break;
-                    case RowValueKind.StyleName: row_.StyleName = val.CastValue<string>(); break;
-                    default: throw new ArgumentOutOfRangeException(nameof(valueKind));
+                    default: throw new ArgumentOutOfRangeException(nameof(value), value);
                 }
-                row_ = ctx.Next(row_);
             }
-        }
 
-        public static object GetRowValue(this IExcelContext ctx, string row, RowValueKind valueKind) => GetRowValue(ctx, ExcelService.RowToInt(row), valueKind);
-        public static object GetRowValue(this IExcelContext ctx, int row, RowValueKind valueKind)
-        {
-            var row_ = ((ExcelContext)ctx).WS.Row(row);
-            switch (valueKind)
+            ExcelHorizontalAlignment ParseHorizontalAlignment(string value)
             {
-                case RowValueKind.Collapsed: return row_.Collapsed;
-                case RowValueKind.CustomHeight: return row_.CustomHeight;
-                case RowValueKind.Height: return row_.Height;
-                case RowValueKind.Hidden: return row_.Hidden;
-                case RowValueKind.Merged: return row_.Merged;
-                case RowValueKind.OutlineLevel: return row_.OutlineLevel;
-                case RowValueKind.PageBreak: return row_.PageBreak;
-                case RowValueKind.Phonetic: return row_.Phonetic;
-                case RowValueKind.StyleName: return row_.StyleName;
-                default: throw new ArgumentOutOfRangeException(nameof(valueKind));
+                if (char.IsDigit(value[0])) return (ExcelHorizontalAlignment)int.Parse(value);
+                switch (value.ToLowerInvariant())
+                {
+                    case "general": return ExcelHorizontalAlignment.General;
+                    case "left": return ExcelHorizontalAlignment.Left;
+                    case "center": return ExcelHorizontalAlignment.Center;
+                    case "centercontinuous": return ExcelHorizontalAlignment.CenterContinuous;
+                    case "right": return ExcelHorizontalAlignment.Right;
+                    case "fill": return ExcelHorizontalAlignment.Fill;
+                    case "distributed": return ExcelHorizontalAlignment.Distributed;
+                    case "justify": return ExcelHorizontalAlignment.Justify;
+                    default: throw new ArgumentOutOfRangeException(nameof(value), value);
+                }
             }
-        }
 
-        #endregion
-
-        #region Parse/Apply
-
-        // SYSTEM
-
-        static T ToStaticEnum<T>(string name, T defaultValue = default) =>
-            string.IsNullOrEmpty(name) ? defaultValue :
-            (T)typeof(T).GetProperty(name, BindingFlags.Public | BindingFlags.Static)?.GetValue(null);
-        static Color ParseColor(string name, Color defaultValue = default) =>
-            string.IsNullOrEmpty(name) ? defaultValue :
-            name.StartsWith("#") ? ColorTranslator.FromHtml(name) :
-            ToStaticEnum<Color>(name);
-        //static T ToEnum<T>(string name, T defaultValue = default) => !string.IsNullOrEmpty(name) ? (T)Enum.Parse(typeof(T), name) : defaultValue;
-        static T ToEnum<T>(JsonElement name, T defaultValue = default)
-            => name.ValueKind == JsonValueKind.String && name.GetString() is string z0 && !string.IsNullOrEmpty(z0) ? (T)Enum.Parse(typeof(T), z0)
-            : name.ValueKind == JsonValueKind.Number && name.GetInt32() is int z1 ? (T)(object)z1
-            : defaultValue;
-        static string NumberformatPrec(string prec, string defaultPrec) => string.IsNullOrEmpty(prec) ? defaultPrec : $"0.{new string('0', int.Parse(prec))}";
-        static Image ParseImage(JsonElement t) => null;
-
-        // PARSE
-
-        static ExcelVerticalAlignmentFont ParseVerticalAlignmentFont(string value)
-        {
-            if (char.IsDigit(value[0])) return (ExcelVerticalAlignmentFont)int.Parse(value);
-            switch (value.ToLowerInvariant())
+            ExcelVerticalAlignment ParseVerticalAlignment(string value)
             {
-                case "none": return ExcelVerticalAlignmentFont.None;
-                case "baseline": return ExcelVerticalAlignmentFont.Baseline;
-                case "subscript": return ExcelVerticalAlignmentFont.Subscript;
-                case "superscript": return ExcelVerticalAlignmentFont.Superscript;
-                default: throw new ArgumentOutOfRangeException(nameof(value), value);
+                if (char.IsDigit(value[0])) return (ExcelVerticalAlignment)int.Parse(value);
+                switch (value.ToLowerInvariant())
+                {
+                    case "top": return ExcelVerticalAlignment.Top;
+                    case "center": return ExcelVerticalAlignment.Center;
+                    case "bottom": return ExcelVerticalAlignment.Bottom;
+                    case "distributed": return ExcelVerticalAlignment.Distributed;
+                    case "justify": return ExcelVerticalAlignment.Justify;
+                    default: throw new ArgumentOutOfRangeException(nameof(value), value);
+                }
             }
-        }
 
-        static ExcelFillStyle ParseFillStyle(string value)
-        {
-            if (char.IsDigit(value[0])) return (ExcelFillStyle)int.Parse(value);
-            switch (value.ToLowerInvariant())
+            ExcelUnderLineType ParseUnderLineType(string value)
             {
-                default: throw new ArgumentOutOfRangeException(nameof(value), value);
+                if (char.IsDigit(value[0])) return (ExcelUnderLineType)int.Parse(value);
+                switch (value.ToLowerInvariant())
+                {
+                    case "none": return ExcelUnderLineType.None;
+                    case "single": return ExcelUnderLineType.Single;
+                    case "double": return ExcelUnderLineType.Double;
+                    case "singleaccounting": return ExcelUnderLineType.SingleAccounting;
+                    case "doubleaccounting": return ExcelUnderLineType.DoubleAccounting;
+                    default: throw new ArgumentOutOfRangeException(nameof(value), value);
+                }
             }
-        }
 
-        static ExcelBorderStyle ParseBorderStyle(string value)
-        {
-            if (char.IsDigit(value[0])) return (ExcelBorderStyle)int.Parse(value);
-            switch (value.ToLowerInvariant())
-            {
-                default: throw new ArgumentOutOfRangeException(nameof(value), value);
-            }
-        }
-
-        static ExcelHorizontalAlignment ParseHorizontalAlignment(string value)
-        {
-            if (char.IsDigit(value[0])) return (ExcelHorizontalAlignment)int.Parse(value);
-            switch (value.ToLowerInvariant())
-            {
-                case "general": return ExcelHorizontalAlignment.General;
-                case "left": return ExcelHorizontalAlignment.Left;
-                case "center": return ExcelHorizontalAlignment.Center;
-                case "centercontinuous": return ExcelHorizontalAlignment.CenterContinuous;
-                case "right": return ExcelHorizontalAlignment.Right;
-                case "fill": return ExcelHorizontalAlignment.Fill;
-                case "distributed": return ExcelHorizontalAlignment.Distributed;
-                case "justify": return ExcelHorizontalAlignment.Justify;
-                default: throw new ArgumentOutOfRangeException(nameof(value), value);
-            }
-        }
-
-        static ExcelVerticalAlignment ParseVerticalAlignment(string value)
-        {
-            if (char.IsDigit(value[0])) return (ExcelVerticalAlignment)int.Parse(value);
-            switch (value.ToLowerInvariant())
-            {
-                case "top": return ExcelVerticalAlignment.Top;
-                case "center": return ExcelVerticalAlignment.Center;
-                case "bottom": return ExcelVerticalAlignment.Bottom;
-                case "distributed": return ExcelVerticalAlignment.Distributed;
-                case "justify": return ExcelVerticalAlignment.Justify;
-                default: throw new ArgumentOutOfRangeException(nameof(value), value);
-            }
-        }
-
-        static bool TryParseDataValidationWarningStyle(string value, out ExcelDataValidationWarningStyle style)
-        {
-            switch (value.ToLowerInvariant())
-            {
-                case "undefined": case "null": style = ExcelDataValidationWarningStyle.undefined; return true;
-                case "stop": style = ExcelDataValidationWarningStyle.stop; return true;
-                case "warning": style = ExcelDataValidationWarningStyle.warning; return true;
-                case "information": style = ExcelDataValidationWarningStyle.information; return true;
-                default: style = default; return false;
-            }
-        }
-
-        static bool TryParseDataValidationOperator(string value, out ExcelDataValidationOperator op)
-        {
-            switch (value)
-            {
-                case "..": case "><": op = ExcelDataValidationOperator.between; return true;
-                case "!.": case "<>": op = ExcelDataValidationOperator.notBetween; return true;
-                case "==": op = ExcelDataValidationOperator.equal; return true;
-                case "!=": op = ExcelDataValidationOperator.notEqual; return true;
-                case "<": op = ExcelDataValidationOperator.lessThan; return true;
-                case "<=": op = ExcelDataValidationOperator.lessThanOrEqual; return true;
-                case ">": op = ExcelDataValidationOperator.greaterThan; return true;
-                case ">=": op = ExcelDataValidationOperator.greaterThanOrEqual; return true;
-                default: op = default; return false;
-            }
-        }
-
-        // APPLY
-
-        public static void ApplyCellStyle(string style, ExcelStyle excelStyle, ExcelDxfStyleConditionalFormatting excelDxfStyle = null)
-        {
             // https://support.office.com/en-us/article/number-format-codes-5026bbd6-04bc-48cd-bf33-80f18b4eae68
             // number-format
             if (style.StartsWith("n") && excelStyle != null)
@@ -1045,9 +1651,9 @@ namespace ExcelTrans
                 else if (style == "fi") excelStyle.Font.Italic = false;
                 else if (style == "fS") excelStyle.Font.Strike = true;
                 else if (style == "fs") excelStyle.Font.Strike = false;
-                else if (style == "f_") excelStyle.Font.UnderLine = true;
-                else if (style == "f!_") excelStyle.Font.UnderLine = false;
-                //else if (style == "") excelStyle.Font.UnderLineType = ?;
+                else if (style == "fU") excelStyle.Font.UnderLine = true;
+                else if (style == "fu") excelStyle.Font.UnderLine = false;
+                else if (style == "fu:") excelStyle.Font.UnderLineType = ParseUnderLineType(style.Substring(3));
                 else if (style.StartsWith("fv")) excelStyle.Font.VerticalAlign = ParseVerticalAlignmentFont(style.Substring(2));
                 else throw new InvalidOperationException($"{style} not defined");
             }
@@ -1064,9 +1670,9 @@ namespace ExcelTrans
                 else if (style == "fi") excelDxfStyle.Font.Italic = false;
                 else if (style == "fS") excelDxfStyle.Font.Strike = true;
                 else if (style == "fs") excelDxfStyle.Font.Strike = false;
-                else if (style == "f_") excelDxfStyle.Font.Underline = ExcelUnderLineType.Single;
-                else if (style == "f!_") excelDxfStyle.Font.Underline = ExcelUnderLineType.None;
-                //else if (style == "") excelDxfStyle.Font.UnderLineType = ?;
+                else if (style == "fU") excelDxfStyle.Font.Underline = ExcelUnderLineType.Single;
+                else if (style == "fu") excelDxfStyle.Font.Underline = ExcelUnderLineType.None;
+                else if (style == "fu:") excelDxfStyle.Font.Underline = ParseUnderLineType(style.Substring(3));
                 //else if (style.StartsWith("fv")) excelDxfStyle.Font.VerticalAlign = ParseVerticalAlignmentFont(style.Substring(2));
                 else throw new InvalidOperationException($"{style} not defined");
             }
@@ -1084,7 +1690,7 @@ namespace ExcelTrans
             {
                 if (style.StartsWith("lc"))
                 {
-                    if (excelDxfStyle.Fill.PatternType == ExcelFillStyle.None) excelDxfStyle.Fill.PatternType = ExcelFillStyle.Solid;
+                    if (excelDxfStyle.Fill.PatternType == ExcelFillStyle.None || excelDxfStyle.Fill.PatternType == ExcelFillStyle.Solid) excelDxfStyle.Fill.PatternType = ExcelFillStyle.Solid;
                     excelDxfStyle.Fill.BackgroundColor.Color = ParseColor(style.Substring(2));
                 }
                 else if (style.StartsWith("lf")) excelDxfStyle.Fill.PatternType = ParseFillStyle(style.Substring(2));
@@ -1110,11 +1716,11 @@ namespace ExcelTrans
                 else if (style.StartsWith("br")) excelDxfStyle.Border.Right.Style = ParseBorderStyle(style.Substring(2));
                 else if (style.StartsWith("bt")) excelDxfStyle.Border.Top.Style = ParseBorderStyle(style.Substring(2));
                 else if (style.StartsWith("bb")) excelDxfStyle.Border.Bottom.Style = ParseBorderStyle(style.Substring(2));
-                //else if (style.StartsWith("bd")) excelDxfStyle.Border.Diagonal.Style = ParseBorderStyle(style.Substring(2));
                 //else if (style == "bdU") excelDxfStyle.Border.DiagonalUp = true;
                 //else if (style == "bdu") excelDxfStyle.Border.DiagonalUp = false;
                 //else if (style == "bdD") excelDxfStyle.Border.DiagonalDown = true;
                 //else if (style == "bdd") excelDxfStyle.Border.DiagonalDown = false;
+                //else if (style.StartsWith("bd")) excelDxfStyle.Border.Diagonal.Style = ParseBorderStyle(style.Substring(2));
                 //else if (style.StartsWith("ba")) excelDxfStyle.Border.BorderAround(ParseBorderStyle(style.Substring(2))); // add color option
                 else throw new InvalidOperationException($"{style} not defined");
             }
@@ -1144,11 +1750,37 @@ namespace ExcelTrans
             else throw new InvalidOperationException($"{style} not defined");
         }
 
-        public static void ApplyCellValidation(string rule, IExcelDataValidation validation)
+        static void ApplyCellValidation(string rule, IExcelDataValidation validation)
         {
+            bool TryParseDataValidationWarningStyle(string value, out ExcelDataValidationWarningStyle style)
+            {
+                switch (value.ToLowerInvariant())
+                {
+                    case "undefined": style = ExcelDataValidationWarningStyle.undefined; return true;
+                    case "stop": style = ExcelDataValidationWarningStyle.stop; return true;
+                    case "warning": style = ExcelDataValidationWarningStyle.warning; return true;
+                    case "information": style = ExcelDataValidationWarningStyle.information; return true;
+                    default: style = default; return false;
+                }
+            }
+
+            bool TryParseDataValidationOperator(string value, out ExcelDataValidationOperator op)
+            {
+                switch (value)
+                {
+                    case "><": case "..": op = ExcelDataValidationOperator.between; return true;
+                    case "<>": case "!.": op = ExcelDataValidationOperator.notBetween; return true;
+                    case "=": case "==": op = ExcelDataValidationOperator.equal; return true;
+                    case "!=": op = ExcelDataValidationOperator.notEqual; return true;
+                    case "<": op = ExcelDataValidationOperator.lessThan; return true;
+                    case "<=": op = ExcelDataValidationOperator.lessThanOrEqual; return true;
+                    case ">": op = ExcelDataValidationOperator.greaterThan; return true;
+                    case ">=": op = ExcelDataValidationOperator.greaterThanOrEqual; return true;
+                    default: op = default; return false;
+                }
+            }
             // base
-            if (TryParseDataValidationWarningStyle(rule, out var style)) validation.ErrorStyle = style;
-            else if (rule == "_") validation.AllowBlank = true;
+            if (rule == "_") validation.AllowBlank = true;
             else if (rule == ".") validation.AllowBlank = false;
             else if (rule == "I") validation.ShowInputMessage = true;
             else if (rule == "i") validation.ShowInputMessage = false;
@@ -1158,6 +1790,8 @@ namespace ExcelTrans
             else if (rule.StartsWith("e:")) validation.Error = rule.Substring(2);
             else if (rule.StartsWith("pt:")) validation.PromptTitle = rule.Substring(3);
             else if (rule.StartsWith("p:")) validation.Prompt = rule.Substring(2);
+            // error style
+            else if (TryParseDataValidationWarningStyle(rule, out var e)) validation.ErrorStyle = e;
             // operator
             else if (validation is IExcelDataValidationWithOperator o && TryParseDataValidationOperator(rule, out var op)) o.Operator = op;
             // formula
@@ -1171,6 +1805,15 @@ namespace ExcelTrans
                 else if (validation is IExcelDataValidationWithFormula<IExcelDataValidationFormulaTime> ft) ft.Formula.ExcelFormula = rule.Substring(2);
                 else throw new ArgumentOutOfRangeException(nameof(rule), $"{rule} not defined");
             }
+            else if (rule.StartsWith("f2:"))
+            {
+                if (validation is IExcelDataValidationWithFormula2<IExcelDataValidationFormula> f) f.Formula2.ExcelFormula = rule.Substring(3);
+                else if (validation is IExcelDataValidationWithFormula2<IExcelDataValidationFormulaDateTime> fdt) fdt.Formula2.ExcelFormula = rule.Substring(3);
+                else if (validation is IExcelDataValidationWithFormula2<IExcelDataValidationFormulaDecimal> fd) fd.Formula2.ExcelFormula = rule.Substring(3);
+                else if (validation is IExcelDataValidationWithFormula2<IExcelDataValidationFormulaInt> fi) fi.Formula2.ExcelFormula = rule.Substring(3);
+                else if (validation is IExcelDataValidationWithFormula2<IExcelDataValidationFormulaTime> ft) ft.Formula2.ExcelFormula = rule.Substring(3);
+                else throw new ArgumentOutOfRangeException(nameof(rule), $"{rule} not defined");
+            }
             // value
             else if (rule.StartsWith("v:"))
             {
@@ -1181,23 +1824,12 @@ namespace ExcelTrans
                 else if (validation is IExcelDataValidationWithFormula<IExcelDataValidationFormulaTime> ft) ft.Formula.Value = DateTime.TryParse(rule.Substring(2), out var z) ? new ExcelTime { Hour = z.Hour, Minute = z.Minute, Second = z.Second } : null;
                 else throw new ArgumentOutOfRangeException(nameof(rule), $"{rule} not defined");
             }
-            // formula2
-            else if (rule.StartsWith("f2:"))
-            {
-                if (validation is IExcelDataValidationWithFormula2<IExcelDataValidationFormula> f) f.Formula2.ExcelFormula = rule.Substring(2);
-                else if (validation is IExcelDataValidationWithFormula2<IExcelDataValidationFormulaDateTime> fdt) fdt.Formula2.ExcelFormula = rule.Substring(2);
-                else if (validation is IExcelDataValidationWithFormula2<IExcelDataValidationFormulaDecimal> fd) fd.Formula2.ExcelFormula = rule.Substring(2);
-                else if (validation is IExcelDataValidationWithFormula2<IExcelDataValidationFormulaInt> fi) fi.Formula2.ExcelFormula = rule.Substring(2);
-                else if (validation is IExcelDataValidationWithFormula2<IExcelDataValidationFormulaTime> ft) ft.Formula2.ExcelFormula = rule.Substring(2);
-                else throw new ArgumentOutOfRangeException(nameof(rule), $"{rule} not defined");
-            }
-            // value2
             else if (rule.StartsWith("v2:"))
             {
-                if (validation is IExcelDataValidationWithFormula2<IExcelDataValidationFormulaDateTime> fdt) fdt.Formula2.Value = DateTime.TryParse(rule.Substring(2), out var z) ? (DateTime?)z : null;
-                else if (validation is IExcelDataValidationWithFormula2<IExcelDataValidationFormulaDecimal> fd) fd.Formula2.Value = double.TryParse(rule.Substring(2), out var z) ? (double?)z : null;
-                else if (validation is IExcelDataValidationWithFormula2<IExcelDataValidationFormulaInt> fi) fi.Formula2.Value = int.TryParse(rule.Substring(2), out var z) ? (int?)z : null;
-                else if (validation is IExcelDataValidationWithFormula2<IExcelDataValidationFormulaTime> ft) ft.Formula2.Value = DateTime.TryParse(rule.Substring(2), out var z) ? new ExcelTime { Hour = z.Hour, Minute = z.Minute, Second = z.Second } : null;
+                if (validation is IExcelDataValidationWithFormula2<IExcelDataValidationFormulaDateTime> fdt) fdt.Formula2.Value = DateTime.TryParse(rule.Substring(3), out var z) ? (DateTime?)z : null;
+                else if (validation is IExcelDataValidationWithFormula2<IExcelDataValidationFormulaDecimal> fd) fd.Formula2.Value = double.TryParse(rule.Substring(3), out var z) ? (double?)z : null;
+                else if (validation is IExcelDataValidationWithFormula2<IExcelDataValidationFormulaInt> fi) fi.Formula2.Value = int.TryParse(rule.Substring(3), out var z) ? (int?)z : null;
+                else if (validation is IExcelDataValidationWithFormula2<IExcelDataValidationFormulaTime> ft) ft.Formula2.Value = DateTime.TryParse(rule.Substring(3), out var z) ? new ExcelTime { Hour = z.Hour, Minute = z.Minute, Second = z.Second } : null;
                 else throw new ArgumentOutOfRangeException(nameof(rule), $"{rule} not defined");
             }
         }

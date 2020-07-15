@@ -7,7 +7,7 @@ using System.Text;
 
 namespace ExcelTrans.Utils
 {
-    public class ExcelSerDes
+    internal class ExcelSerDes
     {
         public static readonly List<object> funcs = new List<object>();
         public static readonly List<Type> cmds = new List<Type>() {

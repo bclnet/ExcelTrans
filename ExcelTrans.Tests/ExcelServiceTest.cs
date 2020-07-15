@@ -13,7 +13,7 @@ namespace ExcelTrans
         [SetUp]
         public void Configure()
         {
-            _simpleCmds = new IExcelCommand[] { new CellsStyle("A1", "f1") };
+            _simpleCmds = new IExcelCommand[] { new CellStyle("A1", "f1") };
             _excelContext = new ExcelContext();
         }
 
@@ -57,8 +57,8 @@ namespace ExcelTrans
             var cmds = ExcelService.Decode(value);
             var cmds2 = ExcelService.Decode(value2);
             // then
-            Check.That(cmds.Select(x => ((CellsStyle)x).Cells)).IsEquivalentTo(_simpleCmds.Select(x => ((CellsStyle)x).Cells));
-            Check.That(cmds2.Select(x => ((CellsStyle)x).Cells)).IsEquivalentTo(_simpleCmds.Select(x => ((CellsStyle)x).Cells));
+            Check.That(cmds.Select(x => ((CellStyle)x).Cells)).IsEquivalentTo(_simpleCmds.Select(x => ((CellStyle)x).Cells));
+            Check.That(cmds2.Select(x => ((CellStyle)x).Cells)).IsEquivalentTo(_simpleCmds.Select(x => ((CellStyle)x).Cells));
         }
 
         [Test]

@@ -4,11 +4,32 @@ using System.IO;
 
 namespace ExcelTrans.Commands
 {
+    /// <summary>
+    /// Pushes a new Frame with `cmds` onto the context stack
+    /// </summary>
+    /// <seealso cref="ExcelTrans.IExcelCommand" />
     public struct PushFrame : IExcelCommand
     {
+        /// <summary>
+        /// Gets the when.
+        /// </summary>
+        /// <value>
+        /// The when.
+        /// </value>
         public When When { get; }
+        /// <summary>
+        /// Gets the CMDS.
+        /// </summary>
+        /// <value>
+        /// The CMDS.
+        /// </value>
         public IExcelCommand[] Cmds { get; private set; }
 
+        /// <summary>
+        /// Initializes a new instance of the <see cref="PushFrame"/> struct.
+        /// </summary>
+        /// <param name="cmds">The CMDS.</param>
+        /// <exception cref="ArgumentNullException">cmds</exception>
         public PushFrame(params IExcelCommand[] cmds)
         {
             When = When.Normal;

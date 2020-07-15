@@ -7,16 +7,67 @@ using System.Linq;
 
 namespace ExcelTrans.Commands
 {
+    /// <summary>
+    /// Pushes a new Set with `group` and `cmds` onto the context stack
+    /// </summary>
+    /// <typeparam name="T"></typeparam>
+    /// <seealso cref="ExcelTrans.IExcelCommand" />
+    /// <seealso cref="ExcelTrans.IExcelSet" />
     public class PushSet<T> : IExcelCommand, IExcelSet
     {
+        /// <summary>
+        /// Gets the when.
+        /// </summary>
+        /// <value>
+        /// The when.
+        /// </value>
         public When When { get; }
+        /// <summary>
+        /// Gets the take y.
+        /// </summary>
+        /// <value>
+        /// The take y.
+        /// </value>
         public int TakeY { get; private set; }
+        /// <summary>
+        /// Gets the skip x.
+        /// </summary>
+        /// <value>
+        /// The skip x.
+        /// </value>
         public int SkipX { get; private set; }
+        /// <summary>
+        /// Gets the skip y.
+        /// </summary>
+        /// <value>
+        /// The skip y.
+        /// </value>
         public int SkipY { get; private set; }
+        /// <summary>
+        /// Gets the group.
+        /// </summary>
+        /// <value>
+        /// The group.
+        /// </value>
         public Func<IExcelContext, IEnumerable<Collection<string>>, IEnumerable<IGrouping<T, Collection<string>>>> Group { get; private set; }
+        /// <summary>
+        /// Gets the CMDS.
+        /// </summary>
+        /// <value>
+        /// The CMDS.
+        /// </value>
         public Func<IExcelContext, object, IExcelCommand[]> Cmds { get; private set; }
         List<Collection<string>> _set;
 
+        /// <summary>
+        /// Initializes a new instance of the <see cref="PushSet{T}"/> class.
+        /// </summary>
+        /// <param name="group">The group.</param>
+        /// <param name="takeY">The take y.</param>
+        /// <param name="skipX">The skip x.</param>
+        /// <param name="skipY">The skip y.</param>
+        /// <param name="cmds">The CMDS.</param>
+        /// <exception cref="ArgumentNullException">cmds</exception>
         public PushSet(Func<IExcelContext, IEnumerable<Collection<string>>, IEnumerable<IGrouping<T, Collection<string>>>> group, int takeY = 1, int skipX = 0, int skipY = 0, Func<IExcelContext, IGrouping<T, Collection<string>>, IExcelCommand[]> cmds = null)
         {
             if (cmds == null)

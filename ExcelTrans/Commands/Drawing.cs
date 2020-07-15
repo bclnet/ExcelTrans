@@ -4,24 +4,111 @@ using System.Text.Json;
 
 namespace ExcelTrans.Commands
 {
+    /// <summary>
+    /// Applies json `.Value` of `.DrawingKind` with `.Name` to `.Address` in range
+    /// </summary>
+    /// <seealso cref="ExcelTrans.IExcelCommand" />
     public struct Drawing : IExcelCommand
     {
+        /// <summary>
+        /// Gets the when.
+        /// </summary>
+        /// <value>
+        /// The when.
+        /// </value>
         public When When { get; }
+        /// <summary>
+        /// Gets the address.
+        /// </summary>
+        /// <value>
+        /// The address.
+        /// </value>
         public string Address { get; private set; }
+        /// <summary>
+        /// Gets the name.
+        /// </summary>
+        /// <value>
+        /// The name.
+        /// </value>
         public string Name { get; private set; }
+        /// <summary>
+        /// Gets the value.
+        /// </summary>
+        /// <value>
+        /// The value.
+        /// </value>
         public string Value { get; private set; }
+        /// <summary>
+        /// Gets the kind of the drawing.
+        /// </summary>
+        /// <value>
+        /// The kind of the drawing.
+        /// </value>
         public DrawingKind DrawingKind { get; private set; }
 
+        /// <summary>
+        /// Initializes a new instance of the <see cref="Drawing"/> struct.
+        /// </summary>
+        /// <param name="row">The row.</param>
+        /// <param name="col">The col.</param>
+        /// <param name="name">The name.</param>
+        /// <param name="value">The value.</param>
+        /// <param name="drawingKind">Kind of the drawing.</param>
         public Drawing(int row, int col, string name, object value, DrawingKind drawingKind)
             : this(ExcelService.GetAddress(row, col), name, value, drawingKind) { }
+        /// <summary>
+        /// Initializes a new instance of the <see cref="Drawing"/> struct.
+        /// </summary>
+        /// <param name="fromRow">From row.</param>
+        /// <param name="fromCol">From col.</param>
+        /// <param name="toRow">To row.</param>
+        /// <param name="toCol">To col.</param>
+        /// <param name="name">The name.</param>
+        /// <param name="value">The value.</param>
+        /// <param name="drawingKind">Kind of the drawing.</param>
         public Drawing(int fromRow, int fromCol, int toRow, int toCol, string name, object value, DrawingKind drawingKind)
             : this(ExcelService.GetAddress(fromRow, fromCol, toRow, toCol), name, value, drawingKind) { }
+        /// <summary>
+        /// Initializes a new instance of the <see cref="Drawing"/> struct.
+        /// </summary>
+        /// <param name="r">The r.</param>
+        /// <param name="name">The name.</param>
+        /// <param name="value">The value.</param>
+        /// <param name="drawingKind">Kind of the drawing.</param>
         public Drawing(Address r, string name, object value, DrawingKind drawingKind)
             : this(ExcelService.GetAddress(r, 0, 0), name, value, drawingKind) { }
+        /// <summary>
+        /// Initializes a new instance of the <see cref="Drawing"/> struct.
+        /// </summary>
+        /// <param name="r">The r.</param>
+        /// <param name="row">The row.</param>
+        /// <param name="col">The col.</param>
+        /// <param name="name">The name.</param>
+        /// <param name="value">The value.</param>
+        /// <param name="drawingKind">Kind of the drawing.</param>
         public Drawing(Address r, int row, int col, string name, object value, DrawingKind drawingKind)
             : this(ExcelService.GetAddress(r, row, col), name, value, drawingKind) { }
+        /// <summary>
+        /// Initializes a new instance of the <see cref="Drawing"/> struct.
+        /// </summary>
+        /// <param name="r">The r.</param>
+        /// <param name="fromRow">From row.</param>
+        /// <param name="fromCol">From col.</param>
+        /// <param name="toRow">To row.</param>
+        /// <param name="toCol">To col.</param>
+        /// <param name="name">The name.</param>
+        /// <param name="value">The value.</param>
+        /// <param name="drawingKind">Kind of the drawing.</param>
         public Drawing(Address r, int fromRow, int fromCol, int toRow, int toCol, string name, object value, DrawingKind drawingKind)
             : this(ExcelService.GetAddress(r, fromRow, fromCol, toRow, toCol), name, value, drawingKind) { }
+        /// <summary>
+        /// Initializes a new instance of the <see cref="Drawing"/> struct.
+        /// </summary>
+        /// <param name="address">The address.</param>
+        /// <param name="name">The name.</param>
+        /// <param name="value">The value.</param>
+        /// <param name="drawingKind">Kind of the drawing.</param>
+        /// <exception cref="ArgumentNullException">name</exception>
         public Drawing(string address, string name, object value, DrawingKind drawingKind)
         {
             When = When.Normal;
