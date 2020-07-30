@@ -6,20 +6,24 @@
     public enum VbaModuleKind
     {
         /// <summary>
-        /// Sets the Workbook VBA Module
+        /// Gets or adds the VBA Module (Name:null for the Workbook VBA Module)
         /// </summary>
-        CodeModule = 0,
+        Get = 0,
+        /// <summary>
+        /// Gets the Workbook VBA Module
+        /// </summary>
+        CodeModule,
         /// <summary>
         /// Adds a new VBA Module
         /// </summary>
-        Module,
+        AddModule,
         /// <summary>
         /// Adds a new VBA public class
         /// </summary>
-        Class,
+        AddClass,
         /// <summary>
         /// Adds a new VBA private class
         /// </summary>
-        PrivateClass,
+        AddPrivateClass,
     }
 }

@@ -13,14 +13,14 @@ namespace ExcelTrans.Utils
         public static readonly List<Type> cmds = new List<Type>() {
             typeof(CellStyle), typeof(CellValidation), typeof(CellValue),
             typeof(ColumnValue),
-            typeof(Command), typeof(CommandCol), typeof(CommandRow),
+            typeof(Command), typeof(CommandCol), typeof(CommandRow), typeof(CommandValue),
             typeof(ConditionalFormatting),
             typeof(Drawing),
             typeof(Flush),
             typeof(PopFrame), typeof(PopSet), typeof(PushFrame), typeof(PushSet<>),
             typeof(Protection),
             typeof(RowValue),
-            typeof(VbaCodeModule), typeof(VbaModule), typeof(VbaReference),
+            typeof(VbaModule), typeof(VbaReference),
             typeof(ViewAction),
             typeof(WorkbookName), typeof(WorkbookOpen), typeof(WorkbookProtection),
             typeof(WorksheetAdd), typeof(WorksheetCopy), typeof(WorksheetDelete), typeof(WorksheetGet), typeof(WorksheetMove) };

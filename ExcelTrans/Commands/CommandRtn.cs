@@ -13,16 +13,12 @@ namespace ExcelTrans.Commands
         /// </summary>
         Normal = 0,
         /// <summary>
-        /// Value should be considered a formula.
-        /// </summary>
-        Formula = 1,
-        /// <summary>
         /// Continue to the next row.
         /// </summary>
-        Continue = 2,
+        Continue = 1,
         /// <summary>
         /// Skip processing the attached commands.
         /// </summary>
-        SkipCmds = 4,
+        SkipCmds = 2,
     }
 }

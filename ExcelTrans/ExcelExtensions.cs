@@ -7,6 +7,11 @@ using OfficeOpenXml.DataValidation.Contracts;
 using OfficeOpenXml.DataValidation.Formulas.Contracts;
 using OfficeOpenXml.Drawing;
 using OfficeOpenXml.Drawing.Chart;
+using OfficeOpenXml.Drawing.Style.Coloring;
+using OfficeOpenXml.Drawing.Style.Effect;
+using OfficeOpenXml.Drawing.Style.Fill;
+using OfficeOpenXml.Drawing.Style.ThreeD;
+using OfficeOpenXml.Drawing.Theme;
 using OfficeOpenXml.Style;
 using OfficeOpenXml.Style.Dxf;
 using OfficeOpenXml.Table.PivotTable;
@@ -20,6 +25,7 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using System.Xml;
 
 namespace ExcelTrans
@@ -105,6 +111,25 @@ namespace ExcelTrans
             return cr;
         }
 
+        /// <summary>
+        /// Executes the value.
+        /// </summary>
+        /// <param name="ctx">The CTX.</param>
+        /// <param name="s">The s.</param>
+        /// <param name="v">The v.</param>
+        /// <param name="action">The action.</param>
+        /// <returns></returns>
+        public static bool ExecuteValue(this IExcelContext ctx, Collection<string> s, object v, Action<CommandValue> action)
+        {
+            foreach (var cmd in ctx.CmdValues)
+                if (cmd != null && cmd.Func(ctx, s, v))
+                {
+                    action(cmd);
+                    return true;
+                }
+            return false;
+        }
+
         #endregion
 
         #region Write
@@ -152,9 +177,8 @@ namespace ExcelTrans
                     continue;
                 if (ctx.Y > 0 && ctx.X > 0)
                 {
-                    if ((cr & CommandRtn.Formula) != CommandRtn.Formula) ws.SetValue(ctx.Y, ctx.X, v);
-                    else ws.Cells[ctx.Y, ctx.X].Formula = s[i];
-                    //if (v is DateTime) ws.Cells[ExcelCellBase.GetAddress(ctx.Y, ctx.X)].Style.Numberformat.Format = DateTimeFormatInfo.CurrentInfo.ShortDatePattern;
+                    if (!ctx.ExecuteValue(s, v, cmd => ctx.WriteValue(ws.Cells[ctx.Y, ctx.X], s[i], cmd.ValueKind, cmd.ValueFormat?.Invoke(ctx))))
+                        ws.SetValue(ctx.Y, ctx.X, v);
                 }
                 ctx.X += ctx.DeltaX;
                 action?.Invoke();
@@ -163,6 +187,41 @@ namespace ExcelTrans
             ctx.Y += ctx.DeltaY;
             // execute-row-after
             ctx.ExecuteRow(When.AfterNormal, s, out var after2);
+        }
+
+        /// <summary>
+        /// Writes the value.
+        /// </summary>
+        /// <param name="ctx">The CTX.</param>
+        /// <param name="range">The range.</param>
+        /// <param name="val">The value.</param>
+        /// <param name="valueKind">Kind of the value.</param>
+        /// <param name="valueFormat">The value format.</param>
+        /// <exception cref="ArgumentOutOfRangeException">valueKind</exception>
+        public static void WriteValue(this IExcelContext ctx, ExcelRangeBase range, object val, CellValueKind valueKind, string valueFormat = null)
+        {
+            var text = val is string z ? z : val.ToString();
+            if (text != null && valueFormat != null)
+                text = string.Format(valueFormat, text);
+            switch (valueKind)
+            {
+                case CellValueKind.Value: case CellValueKind.Text: range.Value = val is string ? text : val; break;
+                case CellValueKind.AutoFilter: range.AutoFilter = val.CastValue<bool>(); break;
+                case CellValueKind.AutoFitColumns: range.AutoFitColumns(); break;
+                case CellValueKind.Comment: range.Comment.Text = text; break;
+                //case CellValueKind.CommentMore: break;
+                //case CellValueKind.ConditionalFormattingMore: break;
+                case CellValueKind.Copy: var range2 = ((ExcelContext)ctx).WS.Cells[ctx.DecodeAddress(text)]; range.Copy(range2); break;
+                case CellValueKind.Formula: range.Formula = text; break;
+                case CellValueKind.FormulaR1C1: range.FormulaR1C1 = text; break;
+                case CellValueKind.Hyperlink: range.Hyperlink = new Uri(text); break;
+                case CellValueKind.Merge: range.Merge = val.CastValue<bool>(); break;
+                case CellValueKind.RichText: range.RichText.Add(text); break;
+                case CellValueKind.RichTextClear: range.RichText.Clear(); break;
+                case CellValueKind.StyleName: range.StyleName = text; break;
+                default: throw new ArgumentOutOfRangeException(nameof(valueKind));
+            }
+            if (val is DateTime) range.Style.Numberformat.Format = DateTimeFormatInfo.CurrentInfo.ShortDatePattern;
         }
 
         /// <summary>
@@ -182,29 +241,29 @@ namespace ExcelTrans
 
         #region Vba
 
+        readonly static Regex VbaIdentifier = new Regex(@"(?<![a-zA-Z\-][0-9]*)[\d]|[^A-Za-z0-9]", RegexOptions.Compiled);
+
         /// <summary>
         /// Vbas the code module.
         /// </summary>
         /// <param name="ctx">The CTX.</param>
-        /// <param name="name">The name.</param>
         /// <param name="code">The code.</param>
         /// <param name="moduleKind">Kind of the module.</param>
         /// <exception cref="ArgumentOutOfRangeException">moduleKind</exception>
-        public static void VbaCodeModule(this IExcelContext ctx, string name, VbaCode code, VbaModuleKind moduleKind)
+        public static void VbaModule(this IExcelContext ctx, VbaCode code, VbaModuleKind moduleKind)
         {
-            //if (!string.IsNullOrEmpty(name) && char.IsDigit(name[0]))
-            //    name = $"{name}";
+            var name = VbaNameCorrection(code.Name);
             var v = ((ExcelContext)ctx).EnsureVba();
             ExcelVBAModule m;
             switch (moduleKind)
             {
+                case VbaModuleKind.Get: m = string.IsNullOrEmpty(name) ? ((ExcelContext)ctx).WB.CodeModule : v.Modules[name] ?? v.Modules.AddModule(name); break;
                 case VbaModuleKind.CodeModule: m = ((ExcelContext)ctx).WB.CodeModule; break;
-                case VbaModuleKind.Module: m = v.Modules.AddModule(name); break;
-                case VbaModuleKind.Class: m = v.Modules.AddClass(name, true); break;
-                case VbaModuleKind.PrivateClass: m = v.Modules.AddClass(name, false); break;
+                case VbaModuleKind.AddModule: m = v.Modules.AddModule(name); break;
+                case VbaModuleKind.AddClass: m = v.Modules.AddClass(name, true); break;
+                case VbaModuleKind.AddPrivateClass: m = v.Modules.AddClass(name, false); break;
                 default: throw new ArgumentOutOfRangeException(nameof(moduleKind), moduleKind.ToString());
             }
-            if (!string.IsNullOrEmpty(code.Name)) m.Name = code.Name;
             if (code.Description != null) m.Description = code.Description;
             if (code.Code != null) m.Code = code.ProcessCode();
             if (code.ReadOnly != null) m.ReadOnly = code.ReadOnly.Value;
@@ -212,23 +271,11 @@ namespace ExcelTrans
         }
 
         /// <summary>
-        /// Vbas the module.
+        /// Vbas the name correction.
         /// </summary>
-        /// <param name="ctx">The CTX.</param>
         /// <param name="name">The name.</param>
-        /// <param name="code">The code.</param>
-        public static void VbaModule(this IExcelContext ctx, string name, VbaCode code)
-        {
-            //if (!string.IsNullOrEmpty(name) && char.IsDigit(name[0]))
-            //    name = $"{name}";
-            var v = ((ExcelContext)ctx).EnsureVba();
-            var m = v.Modules[name] ?? v.Modules.AddModule(name);
-            if (!string.IsNullOrEmpty(code.Name)) m.Name = code.Name;
-            if (code.Description != null) m.Description = code.Description;
-            if (code.Code != null) m.Code = code.ProcessCode();
-            if (code.ReadOnly != null) m.ReadOnly = code.ReadOnly.Value;
-            if (code.Private != null) m.Private = code.Private.Value;
-        }
+        /// <returns></returns>
+        public static string VbaNameCorrection(string name) => name != null ? VbaIdentifier.Replace(name, "_") : null;
 
         /// <summary>
         /// Vbas the reference.
@@ -239,7 +286,15 @@ namespace ExcelTrans
         {
             var references = ((ExcelContext)ctx).EnsureVba().References;
             foreach (var library in libraries)
-                references.Add(new ExcelVbaReference { Name = library.Name, Libid = library.Libid.ToString() });
+            {
+                var reference = (ExcelVbaReference)typeof(ExcelVbaReference)
+                    .GetConstructors(BindingFlags.Instance | BindingFlags.NonPublic)
+                    .FirstOrDefault(c => !c.GetParameters().Any())
+                    .Invoke(new object[0]);
+                reference.Name = library.Name;
+                reference.Libid = library.Libid.ToString();
+                references.Add(reference);
+            }
         }
 
         /// <summary>
@@ -765,7 +820,8 @@ namespace ExcelTrans
         /// <param name="col">The col.</param>
         /// <param name="value">The value.</param>
         /// <param name="valueKind">Kind of the value.</param>
-        public static void CellValue(this IExcelContext ctx, int row, int col, object value, CellValueKind valueKind = CellValueKind.Value) => ctx.CellValue(ExcelService.GetAddress(row, col), value, valueKind);
+        /// <param name="valueFormat">The value format.</param>
+        public static void CellValue(this IExcelContext ctx, int row, int col, object value, CellValueKind valueKind = CellValueKind.Value, string valueFormat = null) => ctx.CellValue(ExcelService.GetAddress(row, col), value, valueKind, valueFormat);
         /// <summary>
         /// Cells the value.
         /// </summary>
@@ -776,7 +832,8 @@ namespace ExcelTrans
         /// <param name="toCol">To col.</param>
         /// <param name="value">The value.</param>
         /// <param name="valueKind">Kind of the value.</param>
-        public static void CellValue(this IExcelContext ctx, int fromRow, int fromCol, int toRow, int toCol, object value, CellValueKind valueKind = CellValueKind.Value) => ctx.CellValue(ExcelService.GetAddress(fromRow, fromCol, toRow, toCol), value, valueKind);
+        /// <param name="valueFormat">The value format.</param>
+        public static void CellValue(this IExcelContext ctx, int fromRow, int fromCol, int toRow, int toCol, object value, CellValueKind valueKind = CellValueKind.Value, string valueFormat = null) => ctx.CellValue(ExcelService.GetAddress(fromRow, fromCol, toRow, toCol), value, valueKind, valueFormat);
         /// <summary>
         /// Cells the value.
         /// </summary>
@@ -784,7 +841,8 @@ namespace ExcelTrans
         /// <param name="r">The r.</param>
         /// <param name="value">The value.</param>
         /// <param name="valueKind">Kind of the value.</param>
-        public static void CellValue(this IExcelContext ctx, Address r, object value, CellValueKind valueKind = CellValueKind.Value) => ctx.CellValue(ExcelService.GetAddress(r, 0, 0), value, valueKind);
+        /// <param name="valueFormat">The value format.</param>
+        public static void CellValue(this IExcelContext ctx, Address r, object value, CellValueKind valueKind = CellValueKind.Value, string valueFormat = null) => ctx.CellValue(ExcelService.GetAddress(r, 0, 0), value, valueKind, valueFormat);
         /// <summary>
         /// Cells the value.
         /// </summary>
@@ -794,7 +852,8 @@ namespace ExcelTrans
         /// <param name="col">The col.</param>
         /// <param name="value">The value.</param>
         /// <param name="valueKind">Kind of the value.</param>
-        public static void CellValue(this IExcelContext ctx, Address r, int row, int col, object value, CellValueKind valueKind = CellValueKind.Value) => ctx.CellValue(ExcelService.GetAddress(r, row, col), value, valueKind);
+        /// <param name="valueFormat">The value format.</param>
+        public static void CellValue(this IExcelContext ctx, Address r, int row, int col, object value, CellValueKind valueKind = CellValueKind.Value, string valueFormat = null) => ctx.CellValue(ExcelService.GetAddress(r, row, col), value, valueKind, valueFormat);
         /// <summary>
         /// Cells the value.
         /// </summary>
@@ -806,7 +865,8 @@ namespace ExcelTrans
         /// <param name="toCol">To col.</param>
         /// <param name="value">The value.</param>
         /// <param name="valueKind">Kind of the value.</param>
-        public static void CellValue(this IExcelContext ctx, Address r, int fromRow, int fromCol, int toRow, int toCol, object value, CellValueKind valueKind = CellValueKind.Value) => ctx.CellValue(ExcelService.GetAddress(r, fromRow, fromCol, toRow, toCol), value, valueKind);
+        /// <param name="valueFormat">The value format.</param>
+        public static void CellValue(this IExcelContext ctx, Address r, int fromRow, int fromCol, int toRow, int toCol, object value, CellValueKind valueKind = CellValueKind.Value, string valueFormat = null) => ctx.CellValue(ExcelService.GetAddress(r, fromRow, fromCol, toRow, toCol), value, valueKind, valueFormat);
         /// <summary>
         /// Cells the value.
         /// </summary>
@@ -814,35 +874,18 @@ namespace ExcelTrans
         /// <param name="cells">The cells.</param>
         /// <param name="value">The value.</param>
         /// <param name="valueKind">Kind of the value.</param>
+        /// <param name="valueFormat">The value format.</param>
         /// <exception cref="ArgumentOutOfRangeException">valueKind</exception>
-        public static void CellValue(this IExcelContext ctx, string cells, object value, CellValueKind valueKind = CellValueKind.Value)
+        public static void CellValue(this IExcelContext ctx, string cells, object value, CellValueKind valueKind = CellValueKind.Value, string valueFormat = null)
         {
             var advance = false;
             var range = ctx.Get(cells);
-            var values = value == null || !(value is Array array) ? new[] { value } : array;
+            var values = value is Array array ? array : new[] { value };
             foreach (var val in values)
             {
                 if (advance) range = ctx.Next(range);
                 else advance = true;
-                switch (valueKind)
-                {
-                    case CellValueKind.Value: case CellValueKind.Text: range.Value = val; break;
-                    case CellValueKind.AutoFilter: range.AutoFilter = val.CastValue<bool>(); break;
-                    case CellValueKind.AutoFitColumns: range.AutoFitColumns(); break;
-                    case CellValueKind.Comment: range.Comment.Text = (string)val; break;
-                    //case CellValueKind.CommentMore: break;
-                    //case CellValueKind.ConditionalFormattingMore: break;
-                    case CellValueKind.Copy: var range2 = ((ExcelContext)ctx).WS.Cells[ctx.DecodeAddress((string)val)]; range.Copy(range2); break;
-                    case CellValueKind.Formula: range.Formula = (string)val; break;
-                    case CellValueKind.FormulaR1C1: range.FormulaR1C1 = (string)val; break;
-                    case CellValueKind.Hyperlink: range.Hyperlink = new Uri((string)val); break;
-                    case CellValueKind.Merge: range.Merge = val.CastValue<bool>(); break;
-                    case CellValueKind.RichText: range.RichText.Add((string)val); break;
-                    case CellValueKind.RichTextClear: range.RichText.Clear(); break;
-                    case CellValueKind.StyleName: range.StyleName = (string)val; break;
-                    default: throw new ArgumentOutOfRangeException(nameof(valueKind));
-                }
-                if (val is DateTime) range.Style.Numberformat.Format = DateTimeFormatInfo.CurrentInfo.ShortDatePattern;
+                ctx.WriteValue(range, val, valueKind, valueFormat);
             }
         }
 
@@ -1145,11 +1188,26 @@ namespace ExcelTrans
             string.IsNullOrEmpty(name) ? defaultValue :
             name.StartsWith("#") ? ColorTranslator.FromHtml(name) :
             ToStaticEnum<Color>(name);
-        //static T ToEnum<T>(string name, T defaultValue = default) => !string.IsNullOrEmpty(name) ? (T)Enum.Parse(typeof(T), name) : defaultValue;
-        static T ToEnum<T>(JsonElement name, T defaultValue = default)
+
+        static T ToEnum<T>(JsonElement name, T defaultValue = default) where T : struct
             => name.ValueKind == JsonValueKind.String && name.GetString() is string z0 && !string.IsNullOrEmpty(z0) ? (T)Enum.Parse(typeof(T), z0)
             : name.ValueKind == JsonValueKind.Number && name.GetInt32() is int z1 ? (T)(object)z1
             : defaultValue;
+
+        static T? ToEnumNullable<T>(JsonElement name, T defaultValue = default) where T : struct
+            => name.ValueKind == JsonValueKind.String && name.GetString() is string z0 && !string.IsNullOrEmpty(z0) ? (T)Enum.Parse(typeof(T), z0)
+            : name.ValueKind == JsonValueKind.Number && name.GetInt32() is int z1 ? (T)(object)z1
+            : defaultValue;
+
+        static T ToEnum<T>(string name, T defaultValue = default) where T : struct
+            => char.IsDigit(name[0]) ? (T)(object)int.Parse(name)
+            : !string.IsNullOrEmpty(name) ? (T)Enum.Parse(typeof(T), name)
+            : defaultValue;
+
+        static T? ToEnumNullable<T>(string name, T defaultValue = default) where T : struct
+          => char.IsDigit(name[0]) ? (T)(object)int.Parse(name)
+          : !string.IsNullOrEmpty(name) ? (T)Enum.Parse(typeof(T), name)
+          : defaultValue;
 
         // APPLY
 
@@ -1297,32 +1355,283 @@ namespace ExcelTrans
 
         static ExcelDrawing ApplyDrawing(string name, JsonElement token, ExcelDrawings drawings, DrawingKind drawingKind)
         {
+            ExcelPivotTable ParsePivotTable(JsonElement t)
+            {
+                return null;
+            }
+
             // image
             Image ParseImage(JsonElement t) => null;
 
-            // parsing base
-            void ApplyDrawingBorder(ExcelDrawingBorder val, JsonElement t)
+            #region Drawing Base
+
+            // drawing : theme
+            void ApplyDrawingRectangle(ExcelDrawingRectangle val, JsonElement t)
             {
-                if (t.TryGetProperty("fill", out var z2)) ApplyDrawingFill(val.Fill, z2);
-                if (t.TryGetProperty("lineStyle", out z2)) val.LineStyle = ToEnum<eLineStyle>(z2);
-                if (t.TryGetProperty("lineCap", out z2)) val.LineCap = ToEnum<eLineCap>(z2);
-                if (t.TryGetProperty("width", out z2)) val.Width = z2.GetInt32();
+                if (t.TryGetProperty("topOffset", out var z2)) val.TopOffset = z2.GetDouble();
+                if (t.TryGetProperty("bottomOffset", out z2)) val.BottomOffset = z2.GetDouble();
+                if (t.TryGetProperty("leftOffset", out z2)) val.LeftOffset = z2.GetDouble();
+                if (t.TryGetProperty("rightOffset", out z2)) val.RightOffset = z2.GetDouble();
             }
-            void ApplyDrawingLineEnd(ExcelDrawingLineEnd val, JsonElement t)
+
+            // drawing : style
+            void ApplyTextFont(ExcelTextFont val, JsonElement t)
             {
-                if (t.TryGetProperty("headEnd", out var z2)) val.HeadEnd = ToEnum<eEndStyle>(z2);
-                if (t.TryGetProperty("tailEnd", out z2)) val.TailEnd = ToEnum<eEndStyle>(z2);
-                if (t.TryGetProperty("tailEndSizeWidth", out z2)) val.TailEndSizeWidth = ToEnum<eEndSize>(z2);
-                if (t.TryGetProperty("tailEndSizeHeight", out z2)) val.TailEndSizeHeight = ToEnum<eEndSize>(z2);
-                if (t.TryGetProperty("headEndSizeWidth", out z2)) val.HeadEndSizeWidth = ToEnum<eEndSize>(z2);
-                if (t.TryGetProperty("headEndSizeHeight", out z2)) val.HeadEndSizeHeight = ToEnum<eEndSize>(z2);
+                if (t.TryGetProperty("latinFont", out var z2)) val.LatinFont = z2.GetString();
+                if (t.TryGetProperty("eastAsianFont", out z2)) val.EastAsianFont = z2.GetString();
+                if (t.TryGetProperty("complexFont", out z2)) val.ComplexFont = z2.GetString();
+                if (t.TryGetProperty("bold", out z2)) val.Bold = z2.GetBoolean();
+                if (t.TryGetProperty("underLine", out z2)) val.UnderLine = ToEnum<eUnderLineType>(z2);
+                if (t.TryGetProperty("underLineColor", out z2)) val.UnderLineColor = ParseColor(z2.GetString());
+                if (t.TryGetProperty("italic", out z2)) val.Italic = z2.GetBoolean();
+                if (t.TryGetProperty("strike", out z2)) val.Strike = ToEnum<eStrikeType>(z2);
+                if (t.TryGetProperty("size", out z2)) val.Size = z2.GetSingle();
+                if (t.TryGetProperty("fill", out z2)) ApplyDrawingFill(val.Fill, z2);
             }
+            void ApplyParagraphCollection(ExcelParagraphCollection val, JsonElement t)
+            {
+                // TODO
+            }
+
+            // drawing : style-3d
+            void ApplyDrawingSphereCoordinate(ExcelDrawingSphereCoordinate val, JsonElement t)
+            {
+                if (t.TryGetProperty("latitude", out var z2)) val.Latitude = z2.GetDouble();
+                if (t.TryGetProperty("longitude", out z2)) val.Longitude = z2.GetDouble();
+                if (t.TryGetProperty("revolution", out z2)) val.Revolution = z2.GetDouble();
+            }
+
+            void ApplyDrawing3D(ExcelDrawing3D val, JsonElement t)
+            {
+                void ApplyDrawingPoint3D(ExcelDrawingPoint3D val_, JsonElement t_)
+                {
+                    if (t_.TryGetProperty("x", out var z2_)) val_.X = z2_.GetDouble();
+                    if (t_.TryGetProperty("y", out z2_)) val_.Y = z2_.GetDouble();
+                    if (t_.TryGetProperty("z", out z2_)) val_.Z = z2_.GetDouble();
+                }
+                void ApplyDrawingScene3DCamera(ExcelDrawingScene3DCamera val_, JsonElement t_)
+                {
+                    if (t_.TryGetProperty("rotation", out var z2_)) ApplyDrawingSphereCoordinate(val_.Rotation, z2_);
+                    if (t_.TryGetProperty("fieldOfViewAngle", out z2_)) val_.FieldOfViewAngle = z2_.GetDouble();
+                    if (t_.TryGetProperty("cameraType", out z2_)) val_.CameraType = ToEnum<ePresetCameraType>(z2_);
+                    if (t_.TryGetProperty("zoom", out z2_)) val_.Zoom = z2_.GetDouble();
+                }
+                void ApplyDrawingScene3DLightRig(ExcelDrawingScene3DLightRig val_, JsonElement t_)
+                {
+                    if (t_.TryGetProperty("rotation", out var z2_)) ApplyDrawingSphereCoordinate(val_.Rotation, z2_);
+                    if (t_.TryGetProperty("direction", out z2_)) val_.Direction = ToEnum<eLightRigDirection>(z2_);
+                    if (t_.TryGetProperty("rigType", out z2_)) val_.RigType = ToEnum<eRigPresetType>(z2_);
+                }
+                void ApplyDrawingScene3DBackDrop(ExcelDrawingScene3DBackDrop val_, JsonElement t_)
+                {
+                    if (t_.TryGetProperty("width", out var z2_)) ApplyDrawingPoint3D(val_.AnchorPoint, z2_);
+                    if (t_.TryGetProperty("height", out z2_)) ApplyDrawingPoint3D(val_.UpVector, z2_);
+                    if (t_.TryGetProperty("bevelType", out z2_)) ApplyDrawingPoint3D(val_.NormalVector, z2_);
+                }
+                void ApplyDrawingScene3D(ExcelDrawingScene3D val_, JsonElement t_)
+                {
+                    if (t_.TryGetProperty("camera", out var z2_)) ApplyDrawingScene3DCamera(val_.Camera, z2_);
+                    if (t_.TryGetProperty("lightRig", out z2_)) ApplyDrawingScene3DLightRig(val_.LightRig, z2_);
+                    if (t_.TryGetProperty("backDropPlane", out z2_)) ApplyDrawingScene3DBackDrop(val_.BackDropPlane, z2_);
+                }
+                void ApplyDrawing3DBevel(ExcelDrawing3DBevel val_, JsonElement t_)
+                {
+                    if (t_.TryGetProperty("width", out var z2_)) val_.Width = z2_.GetDouble();
+                    if (t_.TryGetProperty("height", out z2_)) val_.Height = z2_.GetDouble();
+                    if (t_.TryGetProperty("bevelType", out z2_)) val_.BevelType = ToEnum<eBevelPresetType>(z2_);
+                }
+                if (t.TryGetProperty("scene", out var z2)) ApplyDrawingScene3D(val.Scene, z2);
+                if (t.TryGetProperty("extrusionHeight", out z2)) val.ExtrusionHeight = z2.GetDouble();
+                if (t.TryGetProperty("contourWidth", out z2)) val.ContourWidth = z2.GetDouble();
+                if (t.TryGetProperty("topBevel", out z2)) ApplyDrawing3DBevel(val.TopBevel, z2);
+                if (t.TryGetProperty("bottomBevel", out z2)) ApplyDrawing3DBevel(val.BottomBevel, z2);
+                if (t.TryGetProperty("materialType", out z2)) val.MaterialType = ToEnum<ePresetMaterialType>(z2);
+                if (t.TryGetProperty("shapeDepthZCoordinate", out z2)) val.ShapeDepthZCoordinate = z2.GetDouble();
+            }
+
+            // drawing : style-coloring
+            void ApplyDrawingColorManager(ExcelDrawingColorManager val, JsonElement t)
+            {
+                // TODO
+            }
+
+            // drawing : style-effect
+            void ApplyDrawingEffectStyle(ExcelDrawingEffectStyle val, JsonElement t)
+            {
+                void ApplyDrawingEffectBase(ExcelDrawingEffectBase val_, JsonElement t_) { }
+                void ApplyDrawingShadowEffectBase(ExcelDrawingShadowEffectBase val_, JsonElement t_)
+                {
+                    ApplyDrawingEffectBase(val_, t_);
+                    if (t_.TryGetProperty("distance", out var z2_)) val_.Distance = z2_.GetDouble();
+                }
+                void ApplyDrawingShadowEffect(ExcelDrawingShadowEffect val_, JsonElement t_)
+                {
+                    ApplyDrawingShadowEffectBase(val_, t_);
+                    if (t_.TryGetProperty("color", out var z2_)) ApplyDrawingColorManager(val_.Color, z2_);
+                    if (t_.TryGetProperty("direction", out z2_)) val_.Direction = z2_.GetDouble();
+                }
+                void ApplyDrawingInnerShadowEffect(ExcelDrawingInnerShadowEffect val_, JsonElement t_)
+                {
+                    ApplyDrawingShadowEffect(val_, t_);
+                    if (t_.TryGetProperty("blurRadius", out var z2_)) val_.BlurRadius = z2_.GetDouble();
+                }
+                void ApplyDrawingOuterShadowEffect(ExcelDrawingOuterShadowEffect val_, JsonElement t_)
+                {
+                    ApplyDrawingInnerShadowEffect(val_, t_);
+                    if (t_.TryGetProperty("alignment", out var z2_)) val_.Alignment = ToEnum<eRectangleAlignment>(z2_);
+                    if (t_.TryGetProperty("rotateWithShape", out z2_)) val_.RotateWithShape = z2_.GetBoolean();
+                    if (t_.TryGetProperty("horizontalSkewAngle", out z2_)) val_.HorizontalSkewAngle = z2_.GetDouble();
+                    if (t_.TryGetProperty("verticalSkewAngle", out z2_)) val_.VerticalSkewAngle = z2_.GetDouble();
+                    if (t_.TryGetProperty("horizontalScalingFactor", out z2_)) val_.HorizontalScalingFactor = z2_.GetDouble();
+                    if (t_.TryGetProperty("verticalScalingFactor", out z2_)) val_.VerticalScalingFactor = z2_.GetDouble();
+                }
+                void ApplyDrawingReflectionEffect(ExcelDrawingReflectionEffect val_, JsonElement t_)
+                {
+                    ApplyDrawingShadowEffectBase(val_, t_);
+                    if (t_.TryGetProperty("startPosition", out var z2_)) val_.StartPosition = z2_.GetDouble();
+                    if (t_.TryGetProperty("startOpacity", out z2_)) val_.StartOpacity = z2_.GetDouble();
+                    if (t_.TryGetProperty("endPosition", out z2_)) val_.EndPosition = z2_.GetDouble();
+                    if (t_.TryGetProperty("endOpacity", out z2_)) val_.EndOpacity = z2_.GetDouble();
+                    if (t_.TryGetProperty("fadeDirection", out z2_)) val_.FadeDirection = z2_.GetDouble();
+                    if (t_.TryGetProperty("alignment", out z2_)) val_.Alignment = ToEnum<eRectangleAlignment>(z2_);
+                    if (t_.TryGetProperty("rotateWithShape", out z2_)) val_.RotateWithShape = z2_.GetBoolean();
+                    if (t_.TryGetProperty("horizontalSkewAngle", out z2_)) val_.HorizontalSkewAngle = z2_.GetDouble();
+                    if (t_.TryGetProperty("verticalSkewAngle", out z2_)) val_.VerticalSkewAngle = z2_.GetDouble();
+                    if (t_.TryGetProperty("horizontalScalingFactor", out z2_)) val_.HorizontalScalingFactor = z2_.GetDouble();
+                    if (t_.TryGetProperty("verticalScalingFactor", out z2_)) val_.VerticalScalingFactor = z2_.GetDouble();
+                    if (t_.TryGetProperty("firection", out z2_)) val_.Direction = z2_.GetDouble();
+                    if (t_.TryGetProperty("blurRadius", out z2_)) val_.BlurRadius = z2_.GetDouble();
+                }
+                void ApplyDrawingPresetShadowEffect(ExcelDrawingPresetShadowEffect val_, JsonElement t_)
+                {
+                    ApplyDrawingShadowEffect(val_, t_);
+                    if (t_.TryGetProperty("type", out var z2_)) val_.Type = ToEnum<ePresetShadowType>(z2_);
+                }
+                void ApplyDrawingGlowEffect(ExcelDrawingGlowEffect val_, JsonElement t_)
+                {
+                    ApplyDrawingEffectBase(val_, t_);
+                    if (t_.TryGetProperty("color", out var z2_)) ApplyDrawingColorManager(val_.Color, z2_);
+                    if (t_.TryGetProperty("radius", out z2_)) val_.Radius = z2_.GetDouble();
+                }
+                void ApplyDrawingFillOverlayEffect(ExcelDrawingFillOverlayEffect val_, JsonElement t_)
+                {
+                    ApplyDrawingEffectBase(val_, t_);
+                    if (t_.TryGetProperty("fill", out var z2_)) ApplyDrawingFill(val_.Fill, z2_);
+                    if (t_.TryGetProperty("bevelType", out z2_)) val_.Blend = ToEnum<eBlendMode>(z2_);
+                }
+                void ApplyDrawingBlurEffect(ExcelDrawingBlurEffect val_, JsonElement t_)
+                {
+                    ApplyDrawingEffectBase(val_, t_);
+                    if (t_.TryGetProperty("radius", out var z2_)) val_.Radius = z2_.GetDouble();
+                    if (t_.TryGetProperty("growBounds", out z2_)) val_.GrowBounds = z2_.GetBoolean();
+                }
+                if (t.TryGetProperty("outerShadow", out var z2)) ApplyDrawingOuterShadowEffect(val.OuterShadow, z2);
+                if (t.TryGetProperty("softEdgeRadius", out z2)) val.SoftEdgeRadius = z2.GetDouble();
+                if (t.TryGetProperty("reflection", out z2)) ApplyDrawingReflectionEffect(val.Reflection, z2);
+                if (t.TryGetProperty("presetShadow", out z2)) ApplyDrawingPresetShadowEffect(val.PresetShadow, z2);
+                if (t.TryGetProperty("innerShadow", out z2)) ApplyDrawingInnerShadowEffect(val.InnerShadow, z2);
+                if (t.TryGetProperty("glow", out z2)) ApplyDrawingGlowEffect(val.Glow, z2);
+                if (t.TryGetProperty("fillOverlay", out z2)) ApplyDrawingFillOverlayEffect(val.FillOverlay, z2);
+                if (t.TryGetProperty("blur", out z2)) ApplyDrawingBlurEffect(val.Blur, z2);
+                //
+                // TODO : Methods
+            }
+
+            // drawing : style-fill
+            void ApplyDrawingFillBase(ExcelDrawingFillBase val, JsonElement t)
+            {
+                // TODO
+            }
+
             void ApplyDrawingFill(ExcelDrawingFill val, JsonElement t)
             {
-                if (t.TryGetProperty("orientation", out var z2)) val.Style = ToEnum<eFillStyle>(z2);
+                void ApplyDrawingPatternFill(ExcelDrawingPatternFill val_, JsonElement t_)
+                {
+                    ApplyDrawingFillBase(val_, t_);
+                    if (t_.TryGetProperty("patternType", out var z2_)) val_.PatternType = ToEnum<eFillPatternStyle>(z2_);
+                    if (t_.TryGetProperty("foregroundColor", out z2_)) ApplyDrawingColorManager(val_.ForegroundColor, z2_);
+                    if (t_.TryGetProperty("backgroundColor", out z2_)) ApplyDrawingColorManager(val_.BackgroundColor, z2_);
+                }
+                void ApplyDrawingBlipFillTile(ExcelDrawingBlipFillTile val_, JsonElement t_)
+                {
+                    if (t_.TryGetProperty("flipMode", out var z2_)) val_.FlipMode = ToEnumNullable<eTileFlipMode>(z2_);
+                    if (t_.TryGetProperty("alignment", out z2_)) val_.Alignment = ToEnumNullable<eRectangleAlignment>(z2_);
+                    if (t_.TryGetProperty("horizontalRatio", out z2_)) val_.HorizontalRatio = z2_.GetDouble();
+                    if (t_.TryGetProperty("verticalRatio", out z2_)) val_.VerticalRatio = z2_.GetDouble();
+                    if (t_.TryGetProperty("horizontalOffset", out z2_)) val_.HorizontalOffset = z2_.GetDouble();
+                    if (t_.TryGetProperty("verticalOffset", out z2_)) val_.VerticalOffset = z2_.GetDouble();
+                }
+                void ApplyDrawingBlipEffects(ExcelDrawingBlipEffects val_, JsonElement t_)
+                {
+                    // TODO
+                }
+                void ApplyDrawingBlipFill(ExcelDrawingBlipFill val_, JsonElement t_)
+                {
+                    ApplyDrawingFillBase(val_, t_);
+                    if (t_.TryGetProperty("image", out var z2_)) val_.Image = ParseImage(z2_);
+                    if (t_.TryGetProperty("stretchOffset", out z2_)) ApplyDrawingRectangle(val_.StretchOffset, z2_);
+                    if (t_.TryGetProperty("sourceRectangle", out z2_)) ApplyDrawingRectangle(val_.SourceRectangle, z2_);
+                    if (t_.TryGetProperty("tile", out z2_)) ApplyDrawingBlipFillTile(val_.Tile, z2_);
+                    if (t_.TryGetProperty("effects", out z2_)) ApplyDrawingBlipEffects(val_.Effects, z2_);
+                }
+                ApplyDrawingFillBasic(val, t);
+                if (t.TryGetProperty("patternFill", out var z2)) ApplyDrawingPatternFill(val.PatternFill, z2);
+                if (t.TryGetProperty("blipFill", out z2)) ApplyDrawingBlipFill(val.BlipFill, z2);
+            }
+
+            void ApplyDrawingFillBasic(ExcelDrawingFillBasic val, JsonElement t)
+            {
+                if (t.TryGetProperty("style", out var z2)) val.Style = ToEnum<eFillStyle>(z2);
                 if (t.TryGetProperty("color", out z2)) val.Color = ParseColor(z2.GetString());
+                if (t.TryGetProperty("solidFill", out z2)) ApplyDrawingSolidFill(val.SolidFill, z2);
+                if (t.TryGetProperty("gradientFill", out z2)) ApplyDrawingGradientFill(val.GradientFill, z2);
                 if (t.TryGetProperty("transparancy", out z2)) val.Transparancy = z2.GetInt32();
             }
+
+            void ApplyDrawingSolidFill(ExcelDrawingSolidFill val, JsonElement t)
+            {
+                ApplyDrawingFillBase(val, t);
+                if (t.TryGetProperty("color", out var z2)) ApplyDrawingColorManager(val.Color, z2);
+            }
+
+            void ApplyDrawingGradientFill(ExcelDrawingGradientFill val, JsonElement t)
+            {
+                void ApplyDrawingGradientFillLinearSettings(ExcelDrawingGradientFillLinearSettings val_, JsonElement t_)
+                {
+                    if (t_.TryGetProperty("angel", out var z2_)) val_.Angel = z2_.GetDouble();
+                    if (t_.TryGetProperty("scaled", out z2_)) val_.Scaled = z2_.GetBoolean();
+                }
+                ApplyDrawingFillBase(val, t);
+                if (t.TryGetProperty("tileFlip", out var z2)) val.TileFlip = ToEnum<eTileFlipMode>(z2);
+                if (t.TryGetProperty("rotateWithShape", out z2)) val.RotateWithShape = z2.GetBoolean();
+                // TODO .Colors
+                if (t.TryGetProperty("shadePath", out z2)) val.ShadePath = ToEnum<eShadePath>(z2);
+                if (t.TryGetProperty("focusPoint", out z2)) ApplyDrawingRectangle(val.FocusPoint, z2);
+                if (t.TryGetProperty("linearSettings", out z2)) ApplyDrawingGradientFillLinearSettings(val.LinearSettings, z2);
+            }
+
+            // drawing : base
+            void ApplyDrawingBorder(ExcelDrawingBorder val, JsonElement t)
+            {
+                if (t.TryGetProperty("fill", out var z2)) ApplyDrawingFillBasic(val.Fill, z2);
+                if (t.TryGetProperty("lineStyle", out z2)) val.LineStyle = ToEnumNullable<eLineStyle>(z2);
+                if (t.TryGetProperty("compoundLineStyle", out z2)) val.CompoundLineStyle = ToEnum<eCompundLineStyle>(z2);
+                if (t.TryGetProperty("alignment", out z2)) val.Alignment = ToEnum<ePenAlignment>(z2);
+                if (t.TryGetProperty("lineCap", out z2)) val.LineCap = ToEnum<eLineCap>(z2);
+                if (t.TryGetProperty("width", out z2)) val.Width = z2.GetDouble();
+                if (t.TryGetProperty("join", out z2)) val.Join = ToEnumNullable<eLineJoin>(z2);
+                if (t.TryGetProperty("miterJoinLimit", out z2)) val.MiterJoinLimit = z2.GetDouble();
+                if (t.TryGetProperty("headEnd", out z2)) ApplyDrawingLineEnd(val.HeadEnd, z2);
+                if (t.TryGetProperty("tailEnd", out z2)) ApplyDrawingLineEnd(val.TailEnd, z2);
+            }
+
+            void ApplyDrawingLineEnd(ExcelDrawingLineEnd val, JsonElement t)
+            {
+                if (t.TryGetProperty("style", out var z2)) val.Style = ToEnumNullable<eEndStyle>(z2);
+                if (t.TryGetProperty("width", out z2)) val.Width = ToEnumNullable<eEndSize>(z2);
+                if (t.TryGetProperty("height", out z2)) val.Height = ToEnumNullable<eEndSize>(z2);
+            }
+
             void ApplyView3D(ExcelView3D val, JsonElement t)
             {
                 if (t.TryGetProperty("perspective", out var z2)) val.Perspective = z2.GetDecimal();
@@ -1332,89 +1641,162 @@ namespace ExcelTrans
                 if (t.TryGetProperty("depthPercent", out z2)) val.DepthPercent = z2.GetInt32();
                 if (t.TryGetProperty("heightPercent", out z2)) val.HeightPercent = z2.GetInt32();
             }
-            void ApplyTextFont(ExcelTextFont val, JsonElement t)
+
+            void ApplyDrawingSize(ExcelDrawingSize val, JsonElement t)
             {
-                if (t.TryGetProperty("latinFont", out var z2)) val.LatinFont = z2.GetString();
-                if (t.TryGetProperty("complexFont", out z2)) val.ComplexFont = z2.GetString();
-                if (t.TryGetProperty("bold", out z2)) val.Bold = z2.GetBoolean();
-                if (t.TryGetProperty("underLine", out z2)) val.UnderLine = ToEnum<eUnderLineType>(z2);
-                if (t.TryGetProperty("underLineColor", out z2)) val.UnderLineColor = ParseColor(z2.GetString());
-                if (t.TryGetProperty("italic", out z2)) val.Italic = z2.GetBoolean();
-                if (t.TryGetProperty("strike", out z2)) val.Strike = ToEnum<eStrikeType>(z2);
-                if (t.TryGetProperty("size", out z2)) val.Size = z2.GetSingle();
-                if (t.TryGetProperty("color", out z2)) val.Color = ParseColor(z2.GetString());
-            }
-            void ApplyParagraphCollection(ExcelParagraphCollection val, JsonElement t)
-            {
-            }
-            ExcelPivotTable ParsePivotTable(JsonElement t)
-            {
-                return null;
+                if (t.TryGetProperty("height", out var z2)) val.Height = z2.GetInt64();
+                if (t.TryGetProperty("width", out z2)) val.Width = z2.GetInt64();
             }
 
-            // parsing drawing
-            void ApplyPosition(ExcelDrawing.ExcelPosition val, JsonElement t)
+            void ApplyDrawingCoordinate(ExcelDrawingCoordinate val, JsonElement t)
+            {
+                if (t.TryGetProperty("x", out var z2)) val.X = z2.GetInt32();
+                if (t.TryGetProperty("y", out z2)) val.Y = z2.GetInt32();
+            }
+
+            void ApplyPosition(ExcelPosition val, JsonElement t)
             {
                 if (t.TryGetProperty("column", out var z2)) val.Column = z2.GetInt32();
                 if (t.TryGetProperty("row", out z2)) val.Row = z2.GetInt32();
                 if (t.TryGetProperty("columnOff", out z2)) val.ColumnOff = z2.GetInt32();
                 if (t.TryGetProperty("rowOff", out z2)) val.RowOff = z2.GetInt32();
             }
-            void ApplyDrawing(ExcelDrawing val, JsonElement t)
+
+            void ApplyTextBody(ExcelTextBody val, JsonElement t)
             {
-                if (t.TryGetProperty("editAs", out var z2)) val.EditAs = ToEnum<eEditAs>(z2);
-                if (t.TryGetProperty("name", out z2)) val.Name = z2.GetString();
-                if (t.TryGetProperty("from", out z2)) ApplyPosition(val.From, z2);
-                if (t.TryGetProperty("to", out z2)) ApplyPosition(val.To, z2);
-                if (t.TryGetProperty("print", out z2)) val.Print = z2.GetBoolean();
-                if (t.TryGetProperty("locked", out z2)) val.Locked = z2.GetBoolean();
-                if (t.TryGetProperty("setPosition", out z2) && z2.GetArrayLength() == 2 && z2.EnumerateArray().Cast<JsonElement>().Select(x => x.GetInt32()) is int[] a0) val.SetPosition(a0[0], a0[1]);
-                if (t.TryGetProperty("setPosition", out z2) && z2.GetArrayLength() == 4 && z2.EnumerateArray().Cast<JsonElement>().Select(x => x.GetInt32()) is int[] a1) val.SetPosition(a1[0], a1[1], a1[2], a1[3]);
-                if (t.TryGetProperty("setSize", out z2) && z2.GetArrayLength() == 1 && z2.EnumerateArray().Cast<JsonElement>().Select(x => x.GetInt32()) is int[] a2) val.SetSize(a2[0]);
-                if (t.TryGetProperty("setSize", out z2) && z2.GetArrayLength() == 2 && z2.EnumerateArray().Cast<JsonElement>().Select(x => x.GetInt32()) is int[] a3) val.SetSize(a3[0], a3[1]);
+                if (t.TryGetProperty("Anchor", out var z2)) val.Anchor = ToEnum<eTextAnchoringType>(z2);
+                if (t.TryGetProperty("textAutofit", out z2)) val.TextAutofit = ToEnum<eTextAutofit>(z2);
+                if (t.TryGetProperty("wrapText", out z2)) val.WrapText = ToEnum<eTextWrappingType>(z2);
+                if (t.TryGetProperty("verticalTextOverflow", out z2)) val.VerticalTextOverflow = ToEnum<eTextVerticalOverflow>(z2);
+                if (t.TryGetProperty("horizontalTextOverflow", out z2)) val.HorizontalTextOverflow = ToEnum<eTextHorizontalOverflow>(z2);
+                if (t.TryGetProperty("verticalText", out z2)) val.VerticalText = ToEnum<eTextVerticalType>(z2);
+                if (t.TryGetProperty("fromWordArt", out z2)) val.FromWordArt = z2.GetBoolean();
+                if (t.TryGetProperty("forceAntiAlias", out z2)) val.ForceAntiAlias = z2.GetBoolean();
+                if (t.TryGetProperty("compatibleLineSpacing", out z2)) val.CompatibleLineSpacing = z2.GetBoolean();
+                if (t.TryGetProperty("autofitNormalFontScale", out z2)) val.AutofitNormalFontScale = z2.GetDouble();
+                if (t.TryGetProperty("textUpright", out z2)) val.TextUpright = z2.GetBoolean();
+                if (t.TryGetProperty("spaceBetweenColumns", out z2)) val.SpaceBetweenColumns = z2.GetDouble();
+                if (t.TryGetProperty("rotation", out z2)) val.Rotation = z2.GetDouble();
+                if (t.TryGetProperty("leftInsert", out z2)) val.LeftInsert = z2.GetDouble();
+                if (t.TryGetProperty("rightInsert", out z2)) val.RightInsert = z2.GetDouble();
+                if (t.TryGetProperty("topInsert", out z2)) val.TopInsert = z2.GetDouble();
+                if (t.TryGetProperty("bottomInsert", out z2)) val.BottomInsert = z2.GetDouble();
+                if (t.TryGetProperty("underLine", out z2)) val.UnderLine = ToEnum<eUnderLineType>(z2);
+                if (t.TryGetProperty("anchorCenter", out z2)) val.AnchorCenter = z2.GetBoolean();
+                if (t.TryGetProperty("paragraphSpacing", out z2)) val.ParagraphSpacing = z2.GetBoolean();
+                if (t.TryGetProperty("lineSpaceReduction", out z2)) val.LineSpaceReduction = z2.GetDouble();
             }
 
-            // parsing chart
+            // DRAWING
+
+            void ApplyDrawing(ExcelDrawing val, JsonElement t)
+            {
+                if (t.TryGetProperty("hyperlink", out var z2)) val.Hyperlink = new Uri(z2.GetString());
+                if (t.TryGetProperty("to", out z2)) ApplyPosition(val.To, z2);
+                if (t.TryGetProperty("size", out z2)) ApplyDrawingSize(val.Size, z2);
+                if (t.TryGetProperty("position", out z2)) ApplyDrawingCoordinate(val.Position, z2);
+                if (t.TryGetProperty("from", out z2)) ApplyPosition(val.From, z2);
+                if (t.TryGetProperty("print", out z2)) val.Print = z2.GetBoolean();
+                if (t.TryGetProperty("locked", out z2)) val.Locked = z2.GetBoolean();
+                if (t.TryGetProperty("editAs", out z2)) val.EditAs = ToEnum<eEditAs>(z2);
+                if (t.TryGetProperty("description", out z2)) val.Description = z2.GetString();
+                if (t.TryGetProperty("name", out z2)) val.Name = z2.GetString();
+                if (t.TryGetProperty("setPosition()", out z2) && z2.GetArrayLength() == 2 && z2.EnumerateArray().Cast<JsonElement>().Select(x => x.GetInt32()) is int[] a0) val.SetPosition(a0[0], a0[1]);
+                if (t.TryGetProperty("setPosition()", out z2) && z2.GetArrayLength() == 4 && z2.EnumerateArray().Cast<JsonElement>().Select(x => x.GetInt32()) is int[] a1) val.SetPosition(a1[0], a1[1], a1[2], a1[3]);
+                if (t.TryGetProperty("setSize()", out z2) && z2.GetArrayLength() == 1 && z2.EnumerateArray().Cast<JsonElement>().Select(x => x.GetInt32()) is int[] a2) val.SetSize(a2[0]);
+                if (t.TryGetProperty("setSize()", out z2) && z2.GetArrayLength() == 2 && z2.EnumerateArray().Cast<JsonElement>().Select(x => x.GetInt32()) is int[] a3) val.SetSize(a3[0], a3[1]);
+            }
+
+            ExcelDrawing ApplyPicture(ExcelPicture val, JsonElement t)
+            {
+                ApplyDrawing(val, t);
+                if (t.TryGetProperty("image", out var z2)) val.Image = ParseImage(z2);
+                if (t.TryGetProperty("fill", out z2)) ApplyDrawingFill(val.Fill, z2);
+                if (t.TryGetProperty("border", out z2)) ApplyDrawingBorder(val.Border, z2);
+                if (t.TryGetProperty("effect", out z2)) ApplyDrawingEffectStyle(val.Effect, z2);
+                if (t.TryGetProperty("preferRelativeResize", out z2)) val.PreferRelativeResize = z2.GetBoolean();
+                if (t.TryGetProperty("lockAspectRatio", out z2)) val.LockAspectRatio = z2.GetBoolean();
+                if (t.TryGetProperty("setSize()", out z2)) val.SetSize(z2.GetInt32());
+                return val;
+            }
+
+            ExcelDrawing ApplyShapeBase(ExcelShapeBase val, JsonElement t)
+            {
+                ApplyDrawing(val, t);
+                if (t.TryGetProperty("indent", out var z2)) val.Indent = z2.GetInt32();
+                if (t.TryGetProperty("textAlignment", out z2)) val.TextAlignment = ToEnum<eTextAlignment>(z2);
+                if (t.TryGetProperty("textAnchoringControl", out z2)) val.TextAnchoringControl = z2.GetBoolean();
+                if (t.TryGetProperty("textAnchoring", out z2)) val.TextAnchoring = ToEnum<eTextAnchoringType>(z2);
+                if (t.TryGetProperty("richText", out z2)) ApplyParagraphCollection(val.RichText, z2);
+                if (t.TryGetProperty("lockText", out z2)) val.LockText = z2.GetBoolean();
+                if (t.TryGetProperty("text", out z2)) val.Text = z2.GetString();
+                if (t.TryGetProperty("font", out z2)) ApplyTextFont(val.Font, z2);
+                if (t.TryGetProperty("tailEnd", out z2)) ApplyDrawingLineEnd(val.TailEnd, z2);
+                if (t.TryGetProperty("headEnd", out z2)) ApplyDrawingLineEnd(val.HeadEnd, z2);
+                if (t.TryGetProperty("3D", out z2)) ApplyDrawing3D(val.ThreeD, z2);
+                if (t.TryGetProperty("effect", out z2)) ApplyDrawingEffectStyle(val.Effect, z2);
+                if (t.TryGetProperty("border", out z2)) ApplyDrawingBorder(val.Border, z2);
+                if (t.TryGetProperty("fill", out z2)) ApplyDrawingFill(val.Fill, z2);
+                if (t.TryGetProperty("style", out z2)) val.Style = ToEnum<eShapeStyle>(z2);
+                if (t.TryGetProperty("textVertical", out z2)) val.TextVertical = ToEnum<eTextVerticalType>(z2);
+                if (t.TryGetProperty("textBody", out z2)) ApplyTextBody(val.TextBody, z2);
+                return val;
+            }
+
+            #endregion
+
+            #region Chart
+
             void ApplyChartTitle(ExcelChartTitle val, JsonElement t)
             {
                 if (t.TryGetProperty("text", out var z2)) val.Text = z2.GetString();
-                if (t.TryGetProperty("overlay", out z2)) val.Overlay = z2.GetBoolean();
                 if (t.TryGetProperty("border", out z2)) ApplyDrawingBorder(val.Border, z2);
                 if (t.TryGetProperty("fill", out z2)) ApplyDrawingFill(val.Fill, z2);
                 if (t.TryGetProperty("font", out z2)) ApplyTextFont(val.Font, z2);
+                if (t.TryGetProperty("textBody", out z2)) ApplyTextBody(val.TextBody, z2);
+                if (t.TryGetProperty("effect", out z2)) ApplyDrawingEffectStyle(val.Effect, z2);
+                if (t.TryGetProperty("3D", out z2)) ApplyDrawing3D(val.ThreeD, z2);
                 if (t.TryGetProperty("richText", out z2)) ApplyParagraphCollection(val.RichText, z2);
+                if (t.TryGetProperty("overlay", out z2)) val.Overlay = z2.GetBoolean();
                 if (t.TryGetProperty("anchorCtr", out z2)) val.AnchorCtr = z2.GetBoolean();
                 if (t.TryGetProperty("anchor", out z2)) val.Anchor = ToEnum<eTextAnchoringType>(z2);
                 if (t.TryGetProperty("textVertical", out z2)) val.TextVertical = ToEnum<eTextVerticalType>(z2);
-                if (t.TryGetProperty("logRotationBase", out z2)) val.Rotation = z2.GetDouble();
+                if (t.TryGetProperty("rotation", out z2)) val.Rotation = z2.GetDouble();
             }
             void ApplyChartAxis(ExcelChartAxis val, JsonElement t)
             {
-                if (t.TryGetProperty("font", out var z2)) ApplyTextFont(val.Font, z2);
-                if (t.TryGetProperty("orientation", out z2)) val.Orientation = ToEnum<eAxisOrientation>(z2);
-                if (t.TryGetProperty("logBase", out z2)) val.LogBase = z2.GetDouble();
-                if (t.TryGetProperty("minorTimeUnit", out z2)) val.MinorTimeUnit = ToEnum<eTimeUnit>(z2);
-                if (t.TryGetProperty("majorUnit", out z2)) val.MajorUnit = z2.GetDouble();
-                if (t.TryGetProperty("maxValue", out z2)) val.MaxValue = z2.GetDouble();
-                if (t.TryGetProperty("minValue", out z2)) val.MinValue = z2.GetDouble();
-                if (t.TryGetProperty("title", out z2)) ApplyChartTitle(val.Title, z2);
-                if (t.TryGetProperty("displayUnit", out z2)) val.DisplayUnit = z2.GetDouble();
-                if (t.TryGetProperty("tickLabelPosition", out z2)) val.TickLabelPosition = ToEnum<eTickLabelPosition>(z2);
+                if (t.TryGetProperty("textBody", out var z2)) ApplyTextBody(val.TextBody, z2);
                 if (t.TryGetProperty("deleted", out z2)) val.Deleted = z2.GetBoolean();
-                if (t.TryGetProperty("minorGridlines", out z2)) ApplyDrawingBorder(val.MinorGridlines, z2);
-                if (t.TryGetProperty("border", out z2)) ApplyDrawingBorder(val.Border, z2);
-                if (t.TryGetProperty("fill", out z2)) ApplyDrawingFill(val.Fill, z2);
-                if (t.TryGetProperty("labelPosition", out z2)) val.LabelPosition = ToEnum<eTickLabelPosition>(z2);
-                if (t.TryGetProperty("sourceLinked", out z2)) val.SourceLinked = z2.GetBoolean();
-                if (t.TryGetProperty("format", out z2)) val.Format = z2.GetString();
-                if (t.TryGetProperty("crossesAt", out z2)) val.CrossesAt = z2.GetDouble();
-                if (t.TryGetProperty("crossBetween", out z2)) val.CrossBetween = ToEnum<eCrossBetween>(z2);
-                if (t.TryGetProperty("crosses", out z2)) val.Crosses = ToEnum<eCrosses>(z2);
-                //if (t.TryGetProperty("axisPosition", out z2)) val.AxisPosition = ToEnum<eAxisPosition>(z2);
-                if (t.TryGetProperty("minorTickMark", out z2)) val.MinorTickMark = ToEnum<eAxisTickMark>(z2);
-                if (t.TryGetProperty("majorTickMark", out z2)) val.MajorTickMark = ToEnum<eAxisTickMark>(z2);
+                if (t.TryGetProperty("tickLabelPosition", out z2)) val.TickLabelPosition = ToEnum<eTickLabelPosition>(z2);
+                if (t.TryGetProperty("displayUnit", out z2)) val.DisplayUnit = z2.GetDouble();
+                if (t.TryGetProperty("title", out z2)) ApplyChartTitle(val.Title, z2);
+                if (t.TryGetProperty("minValue", out z2)) val.MinValue = z2.GetDouble();
+                if (t.TryGetProperty("maxValue", out z2)) val.MaxValue = z2.GetDouble();
+                if (t.TryGetProperty("majorUnit", out z2)) val.MajorUnit = z2.GetDouble();
+                if (t.TryGetProperty("minorUnit", out z2)) val.MinorUnit = z2.GetDouble();
+                if (t.TryGetProperty("font", out z2)) ApplyTextFont(val.Font, z2);
+                if (t.TryGetProperty("minorTimeUnit", out z2)) val.MinorTimeUnit = ToEnumNullable<eTimeUnit>(z2);
+                if (t.TryGetProperty("logBase", out z2)) val.LogBase = z2.GetDouble();
+                if (t.TryGetProperty("orientation", out z2)) val.Orientation = ToEnum<eAxisOrientation>(z2);
                 if (t.TryGetProperty("majorGridlines", out z2)) ApplyDrawingBorder(val.MajorGridlines, z2);
-                if (t.TryGetProperty("removeGridlines", out z2)) val.RemoveGridlines();
+                if (t.TryGetProperty("majorGridlineEffects", out z2)) ApplyDrawingEffectStyle(val.MajorGridlineEffects, z2);
+                if (t.TryGetProperty("minorGridlines", out z2)) ApplyDrawingBorder(val.MinorGridlines, z2);
+                if (t.TryGetProperty("minorGridlineEffects", out z2)) ApplyDrawingEffectStyle(val.MinorGridlineEffects, z2);
+                if (t.TryGetProperty("majorTimeUnit", out z2)) val.MajorTimeUnit = ToEnumNullable<eTimeUnit>(z2);
+                if (t.TryGetProperty("3D", out z2)) ApplyDrawing3D(val.ThreeD, z2);
+                if (t.TryGetProperty("effect", out z2)) ApplyDrawingEffectStyle(val.Effect, z2);
+                if (t.TryGetProperty("border", out z2)) ApplyDrawingBorder(val.Border, z2);
+                if (t.TryGetProperty("majorTickMark", out z2)) val.MajorTickMark = ToEnum<eAxisTickMark>(z2);
+                //if (t.TryGetProperty("axisPosition", out z2)) val.AxisPosition = ToEnum<eAxisPosition>(z2);
+                if (t.TryGetProperty("crosses", out z2)) val.Crosses = ToEnum<eCrosses>(z2);
+                if (t.TryGetProperty("crossBetween", out z2)) val.CrossBetween = ToEnum<eCrossBetween>(z2);
+                if (t.TryGetProperty("minorTickMark", out z2)) val.MinorTickMark = ToEnum<eAxisTickMark>(z2);
+                if (t.TryGetProperty("format", out z2)) val.Format = z2.GetString();
+                if (t.TryGetProperty("sourceLinked", out z2)) val.SourceLinked = z2.GetBoolean();
+                if (t.TryGetProperty("labelPosition", out z2)) val.LabelPosition = ToEnum<eTickLabelPosition>(z2);
+                if (t.TryGetProperty("fill", out z2)) ApplyDrawingFill(val.Fill, z2);
+                if (t.TryGetProperty("crossesAt", out z2)) val.CrossesAt = z2.GetDouble();
+                if (t.TryGetProperty("removeGridlines()", out z2)) val.RemoveGridlines();
             }
             void ApplyChartDataTable(ExcelChartDataTable val, JsonElement t)
             {
@@ -1425,6 +1807,9 @@ namespace ExcelTrans
                 if (t.TryGetProperty("fill", out z2)) ApplyDrawingFill(val.Fill, z2);
                 if (t.TryGetProperty("border", out z2)) ApplyDrawingBorder(val.Border, z2);
                 if (t.TryGetProperty("font", out z2)) ApplyTextFont(val.Font, z2);
+                if (t.TryGetProperty("textBody", out z2)) ApplyTextBody(val.TextBody, z2);
+                if (t.TryGetProperty("effect", out z2)) ApplyDrawingEffectStyle(val.Effect, z2);
+                if (t.TryGetProperty("3D", out z2)) ApplyDrawing3D(val.ThreeD, z2);
             }
             void ApplyChartPlotArea(ExcelChartPlotArea val, JsonElement t)
             {
@@ -1432,6 +1817,8 @@ namespace ExcelTrans
                 if (t.TryGetProperty("dataTable", out var z2)) ApplyChartDataTable(val.DataTable, z2);
                 if (t.TryGetProperty("fill", out z2)) ApplyDrawingFill(val.Fill, z2);
                 if (t.TryGetProperty("border", out z2)) ApplyDrawingBorder(val.Border, z2);
+                if (t.TryGetProperty("effect", out z2)) ApplyDrawingEffectStyle(val.Effect, z2);
+                if (t.TryGetProperty("3D", out z2)) ApplyDrawing3D(val.ThreeD, z2);
             }
             void ApplyChartLegend(ExcelChartLegend val, JsonElement t)
             {
@@ -1440,73 +1827,56 @@ namespace ExcelTrans
                 if (t.TryGetProperty("fill", out z2)) ApplyDrawingFill(val.Fill, z2);
                 if (t.TryGetProperty("border", out z2)) ApplyDrawingBorder(val.Border, z2);
                 if (t.TryGetProperty("font", out z2)) ApplyTextFont(val.Font, z2);
+                if (t.TryGetProperty("textBody", out z2)) ApplyTextBody(val.TextBody, z2);
+                if (t.TryGetProperty("3D", out z2)) ApplyDrawing3D(val.ThreeD, z2);
+            }
+            void ApplyChartSurface(ExcelChartSurface val, JsonElement t)
+            {
+                if (t.TryGetProperty("thickness", out var z2)) val.Thickness = z2.GetInt32();
+                if (t.TryGetProperty("fill", out z2)) ApplyDrawingFill(val.Fill, z2);
+                if (t.TryGetProperty("border", out z2)) ApplyDrawingBorder(val.Border, z2);
+                if (t.TryGetProperty("effect", out z2)) ApplyDrawingEffectStyle(val.Effect, z2);
+                if (t.TryGetProperty("3D", out z2)) ApplyDrawing3D(val.ThreeD, z2);
             }
             void ApplyChartAxis2(ExcelChartAxis[] val, JsonElement t)
             {
             }
-            void ApplyChartSeries(ExcelChartSeries val, JsonElement t)
+            void ApplyChartSeries(ExcelChartSeries<ExcelChartSerie> val, JsonElement t)
             {
             }
             void ApplyChartXml(XmlDocument val, JsonElement t)
             {
             }
+
             ExcelDrawing ApplyChart(ExcelChart val, JsonElement t)
             {
                 ApplyDrawing(val, t);
-                if (t.TryGetProperty("yAxis", out var z2)) ApplyChartAxis(val.YAxis, z2);
-                if (t.TryGetProperty("useSecondaryAxis", out z2)) val.UseSecondaryAxis = z2.GetBoolean();
-                if (t.TryGetProperty("style", out z2)) val.Style = ToEnum<eChartStyle>(z2);
-                if (t.TryGetProperty("roundedCorners", out z2)) val.RoundedCorners = z2.GetBoolean();
-                if (t.TryGetProperty("showHiddenData", out z2)) val.ShowHiddenData = z2.GetBoolean();
-                if (t.TryGetProperty("displayBlanksAs", out z2)) val.DisplayBlanksAs = ToEnum<eDisplayBlanksAs>(z2);
-                if (t.TryGetProperty("plotArea", out z2)) ApplyChartPlotArea(val.PlotArea, z2);
-                if (t.TryGetProperty("yAxis", out z2)) ApplyChartAxis(val.XAxis, z2);
-                if (t.TryGetProperty("legend", out z2)) ApplyChartLegend(val.Legend, z2);
-                if (t.TryGetProperty("border", out z2)) ApplyDrawingBorder(val.Border, z2);
-                if (t.TryGetProperty("fill", out z2)) ApplyDrawingFill(val.Fill, z2);
-                if (t.TryGetProperty("view3D", out z2)) ApplyView3D(val.View3D, z2);
-                //if (t.TryGetProperty("grouping", out z2)) val.Grouping = ToEnum<eGrouping>(z2.GetString());
-                if (t.TryGetProperty("showDataLabelsOverMaximum", out z2)) val.ShowDataLabelsOverMaximum = z2.GetBoolean();
+                if (t.TryGetProperty("series", out var z2)) ApplyChartSeries(val.Series, z2);
                 if (t.TryGetProperty("axis", out z2)) ApplyChartAxis2(val.Axis, z2);
-                if (t.TryGetProperty("series", out z2)) ApplyChartSeries(val.Series, z2);
+                if (t.TryGetProperty("xAxis", out z2)) ApplyChartAxis(val.XAxis, z2);
+                if (t.TryGetProperty("yAxis", out z2)) ApplyChartAxis(val.YAxis, z2);
+                if (t.TryGetProperty("style", out z2)) val.Style = ToEnum<eChartStyle>(z2);
+                if (t.TryGetProperty("plotArea", out z2)) ApplyChartPlotArea(val.PlotArea, z2);
+                if (t.TryGetProperty("legend", out z2)) ApplyChartLegend(val.Legend, z2);
+                if (t.TryGetProperty("effect", out z2)) ApplyDrawingEffectStyle(val.Effect, z2);
+                if (t.TryGetProperty("fill", out z2)) ApplyDrawingFill(val.Fill, z2);
                 if (t.TryGetProperty("title", out z2)) ApplyChartTitle(val.Title, z2);
-                if (t.TryGetProperty("chartXml", out z2)) ApplyChartXml(val.ChartXml, z2);
-                if (t.TryGetProperty("varyColors", out z2)) val.VaryColors = z2.GetBoolean();
-                //if (t.TryGetProperty("pivotTableSource", out z2)) ParsePivotTable(val.PivotTableSource, z2);
-                return val;
-            }
-
-            // parsing picture
-            ExcelDrawing ApplyPicture(ExcelPicture val, JsonElement t)
-            {
-                ApplyDrawing(val, t);
-                //if (t.TryGetProperty("image", out var z2)) val.Image = ParseImage(z2.GetString());
-                //if (t.TryGetProperty("imageFormat", out z2)) ApplyImageFormat(val.ImageFormat, z2);
-                if (t.TryGetProperty("fill", out var z2)) ApplyDrawingFill(val.Fill, z2);
-                if (t.TryGetProperty("border", out z2)) ApplyDrawingBorder(val.Border, z2);
-                //if (t.TryGetProperty("hyperlink", out z2)) val.Hyperlink = new Uri(z2.GetString());
-                return val;
-            }
-
-            // parsing shape
-            ExcelDrawing ApplyShape(ExcelShape val, JsonElement t)
-            {
-                ApplyDrawing(val, t);
-                //if (t.TryGetProperty("style", out var z2)) val.Style = ToEnum<eShapeStyle>(z2);
-                if (t.TryGetProperty("fill", out var z2)) ApplyDrawingFill(val.Fill, z2);
-                if (t.TryGetProperty("border", out z2)) ApplyDrawingBorder(val.Border, z2);
-                if (t.TryGetProperty("lineEnds", out z2)) ApplyDrawingLineEnd(val.LineEnds, z2);
+                if (t.TryGetProperty("3D", out z2)) ApplyDrawing3D(val.ThreeD, z2);
                 if (t.TryGetProperty("font", out z2)) ApplyTextFont(val.Font, z2);
-                if (t.TryGetProperty("text", out z2)) val.Text = z2.GetString();
-                if (t.TryGetProperty("lockText", out z2)) val.LockText = z2.GetBoolean();
-                if (t.TryGetProperty("richText", out z2)) ApplyParagraphCollection(val.RichText, z2);
-                if (t.TryGetProperty("textAnchoring", out z2)) val.TextAnchoring = ToEnum<eTextAnchoringType>(z2);
-                if (t.TryGetProperty("textAnchoringControl", out z2)) val.TextAnchoringControl = z2.GetBoolean();
-                if (t.TryGetProperty("textAlignment", out z2)) val.TextAlignment = ToEnum<eTextAlignment>(z2);
-                if (t.TryGetProperty("indent", out z2)) val.Indent = z2.GetInt32();
-                if (t.TryGetProperty("textVertical", out z2)) val.TextVertical = ToEnum<eTextVerticalType>(z2);
+                if (t.TryGetProperty("textBody", out z2)) ApplyTextBody(val.TextBody, z2);
+                //if (t.TryGetProperty("pivotTableSource", out z2)) ParsePivotTable(val.PivotTableSource, z2);
+                if (t.TryGetProperty("varyColors", out z2)) val.VaryColors = z2.GetBoolean();
+                if (t.TryGetProperty("floor", out z2)) ApplyChartSurface(val.Floor, z2);
+                if (t.TryGetProperty("sideWall", out z2)) ApplyChartSurface(val.SideWall, z2);
+                if (t.TryGetProperty("border", out z2)) ApplyDrawingBorder(val.Border, z2);
+                if (t.TryGetProperty("chartXml", out z2)) ApplyChartXml(val.ChartXml, z2);
+                if (t.TryGetProperty("backWall", out z2)) ApplyChartSurface(val.BackWall, z2);
+                if (t.TryGetProperty("view3D", out z2)) ApplyView3D(val.View3D, z2);
+                if (t.TryGetProperty("useSecondaryAxis", out z2)) val.UseSecondaryAxis = z2.GetBoolean();
                 return val;
             }
+
+            #endregion
 
             // drawings
             switch (drawingKind)
@@ -1529,7 +1899,7 @@ namespace ExcelTrans
                     {
                         var style = token.TryGetProperty("style", out var z2) ? (eShapeStyle?)ToEnum<eShapeStyle>(z2) : null;
                         if (style == null) return null;
-                        return ApplyShape(drawings.AddShape(name, style.Value), token);
+                        return ApplyShapeBase(drawings.AddShape(name, style.Value), token);
                     }
                 case DrawingKind.Clear: drawings.Clear(); return null;
                 case DrawingKind.Remove: drawings.Remove(name); return null;
@@ -1540,82 +1910,6 @@ namespace ExcelTrans
         static void ApplyStyle(string style, ExcelStyle excelStyle, ExcelDxfStyleConditionalFormatting excelDxfStyle)
         {
             string NumberformatPrec(string prec, string defaultPrec) => string.IsNullOrEmpty(prec) ? defaultPrec : $"0.{new string('0', int.Parse(prec))}";
-
-            ExcelVerticalAlignmentFont ParseVerticalAlignmentFont(string value)
-            {
-                if (char.IsDigit(value[0])) return (ExcelVerticalAlignmentFont)int.Parse(value);
-                switch (value.ToLowerInvariant())
-                {
-                    case "none": return ExcelVerticalAlignmentFont.None;
-                    case "baseline": return ExcelVerticalAlignmentFont.Baseline;
-                    case "subscript": return ExcelVerticalAlignmentFont.Subscript;
-                    case "superscript": return ExcelVerticalAlignmentFont.Superscript;
-                    default: throw new ArgumentOutOfRangeException(nameof(value), value);
-                }
-            }
-
-            ExcelFillStyle ParseFillStyle(string value)
-            {
-                if (char.IsDigit(value[0])) return (ExcelFillStyle)int.Parse(value);
-                switch (value.ToLowerInvariant())
-                {
-                    default: throw new ArgumentOutOfRangeException(nameof(value), value);
-                }
-            }
-
-            ExcelBorderStyle ParseBorderStyle(string value)
-            {
-                if (char.IsDigit(value[0])) return (ExcelBorderStyle)int.Parse(value);
-                switch (value.ToLowerInvariant())
-                {
-                    default: throw new ArgumentOutOfRangeException(nameof(value), value);
-                }
-            }
-
-            ExcelHorizontalAlignment ParseHorizontalAlignment(string value)
-            {
-                if (char.IsDigit(value[0])) return (ExcelHorizontalAlignment)int.Parse(value);
-                switch (value.ToLowerInvariant())
-                {
-                    case "general": return ExcelHorizontalAlignment.General;
-                    case "left": return ExcelHorizontalAlignment.Left;
-                    case "center": return ExcelHorizontalAlignment.Center;
-                    case "centercontinuous": return ExcelHorizontalAlignment.CenterContinuous;
-                    case "right": return ExcelHorizontalAlignment.Right;
-                    case "fill": return ExcelHorizontalAlignment.Fill;
-                    case "distributed": return ExcelHorizontalAlignment.Distributed;
-                    case "justify": return ExcelHorizontalAlignment.Justify;
-                    default: throw new ArgumentOutOfRangeException(nameof(value), value);
-                }
-            }
-
-            ExcelVerticalAlignment ParseVerticalAlignment(string value)
-            {
-                if (char.IsDigit(value[0])) return (ExcelVerticalAlignment)int.Parse(value);
-                switch (value.ToLowerInvariant())
-                {
-                    case "top": return ExcelVerticalAlignment.Top;
-                    case "center": return ExcelVerticalAlignment.Center;
-                    case "bottom": return ExcelVerticalAlignment.Bottom;
-                    case "distributed": return ExcelVerticalAlignment.Distributed;
-                    case "justify": return ExcelVerticalAlignment.Justify;
-                    default: throw new ArgumentOutOfRangeException(nameof(value), value);
-                }
-            }
-
-            ExcelUnderLineType ParseUnderLineType(string value)
-            {
-                if (char.IsDigit(value[0])) return (ExcelUnderLineType)int.Parse(value);
-                switch (value.ToLowerInvariant())
-                {
-                    case "none": return ExcelUnderLineType.None;
-                    case "single": return ExcelUnderLineType.Single;
-                    case "double": return ExcelUnderLineType.Double;
-                    case "singleaccounting": return ExcelUnderLineType.SingleAccounting;
-                    case "doubleaccounting": return ExcelUnderLineType.DoubleAccounting;
-                    default: throw new ArgumentOutOfRangeException(nameof(value), value);
-                }
-            }
 
             // https://support.office.com/en-us/article/number-format-codes-5026bbd6-04bc-48cd-bf33-80f18b4eae68
             // number-format
@@ -1653,8 +1947,8 @@ namespace ExcelTrans
                 else if (style == "fs") excelStyle.Font.Strike = false;
                 else if (style == "fU") excelStyle.Font.UnderLine = true;
                 else if (style == "fu") excelStyle.Font.UnderLine = false;
-                else if (style == "fu:") excelStyle.Font.UnderLineType = ParseUnderLineType(style.Substring(3));
-                else if (style.StartsWith("fv")) excelStyle.Font.VerticalAlign = ParseVerticalAlignmentFont(style.Substring(2));
+                else if (style == "fu:") excelStyle.Font.UnderLineType = ToEnum<ExcelUnderLineType>(style.Substring(3));
+                else if (style.StartsWith("fv")) excelStyle.Font.VerticalAlign = ToEnum<ExcelVerticalAlignmentFont>(style.Substring(2));
                 else throw new InvalidOperationException($"{style} not defined");
             }
             else if (style.StartsWith("f") && excelDxfStyle != null)
@@ -1672,8 +1966,8 @@ namespace ExcelTrans
                 else if (style == "fs") excelDxfStyle.Font.Strike = false;
                 else if (style == "fU") excelDxfStyle.Font.Underline = ExcelUnderLineType.Single;
                 else if (style == "fu") excelDxfStyle.Font.Underline = ExcelUnderLineType.None;
-                else if (style == "fu:") excelDxfStyle.Font.Underline = ParseUnderLineType(style.Substring(3));
-                //else if (style.StartsWith("fv")) excelDxfStyle.Font.VerticalAlign = ParseVerticalAlignmentFont(style.Substring(2));
+                else if (style == "fu:") excelDxfStyle.Font.Underline = ToEnumNullable<ExcelUnderLineType>(style.Substring(3));
+                //else if (style.StartsWith("fv")) excelDxfStyle.Font.VerticalAlign = ToEnum<ExcelVerticalAlignmentFont>(style.Substring(2));
                 else throw new InvalidOperationException($"{style} not defined");
             }
             // fill
@@ -1684,7 +1978,7 @@ namespace ExcelTrans
                     if (excelStyle.Fill.PatternType == ExcelFillStyle.None || excelStyle.Fill.PatternType == ExcelFillStyle.Solid) excelStyle.Fill.PatternType = ExcelFillStyle.Solid;
                     excelStyle.Fill.BackgroundColor.SetColor(ParseColor(style.Substring(2)));
                 }
-                else if (style.StartsWith("lf")) excelStyle.Fill.PatternType = ParseFillStyle(style.Substring(2));
+                else if (style.StartsWith("lf")) excelStyle.Fill.PatternType = ToEnum<ExcelFillStyle>(style.Substring(2));
             }
             else if (style.StartsWith("l") && excelDxfStyle != null)
             {
@@ -1693,60 +1987,66 @@ namespace ExcelTrans
                     if (excelDxfStyle.Fill.PatternType == ExcelFillStyle.None || excelDxfStyle.Fill.PatternType == ExcelFillStyle.Solid) excelDxfStyle.Fill.PatternType = ExcelFillStyle.Solid;
                     excelDxfStyle.Fill.BackgroundColor.Color = ParseColor(style.Substring(2));
                 }
-                else if (style.StartsWith("lf")) excelDxfStyle.Fill.PatternType = ParseFillStyle(style.Substring(2));
+                else if (style.StartsWith("lf")) excelDxfStyle.Fill.PatternType = ToEnumNullable<ExcelFillStyle>(style.Substring(2));
             }
             // border
             else if (style.StartsWith("b") && excelStyle != null)
             {
-                if (style.StartsWith("bl")) excelStyle.Border.Left.Style = ParseBorderStyle(style.Substring(2));
-                else if (style.StartsWith("br")) excelStyle.Border.Right.Style = ParseBorderStyle(style.Substring(2));
-                else if (style.StartsWith("bt")) excelStyle.Border.Top.Style = ParseBorderStyle(style.Substring(2));
-                else if (style.StartsWith("bb")) excelStyle.Border.Bottom.Style = ParseBorderStyle(style.Substring(2));
+                if (style.StartsWith("bl")) excelStyle.Border.Left.Style = ToEnum<ExcelBorderStyle>(style.Substring(2));
+                else if (style.StartsWith("br")) excelStyle.Border.Right.Style = ToEnum<ExcelBorderStyle>(style.Substring(2));
+                else if (style.StartsWith("bt")) excelStyle.Border.Top.Style = ToEnum<ExcelBorderStyle>(style.Substring(2));
+                else if (style.StartsWith("bb")) excelStyle.Border.Bottom.Style = ToEnum<ExcelBorderStyle>(style.Substring(2));
                 else if (style == "bdU") excelStyle.Border.DiagonalUp = true;
                 else if (style == "bdu") excelStyle.Border.DiagonalUp = false;
                 else if (style == "bdD") excelStyle.Border.DiagonalDown = true;
                 else if (style == "bdd") excelStyle.Border.DiagonalDown = false;
-                else if (style.StartsWith("bd")) excelStyle.Border.Diagonal.Style = ParseBorderStyle(style.Substring(2));
-                else if (style.StartsWith("ba")) excelStyle.Border.BorderAround(ParseBorderStyle(style.Substring(2))); // add color option
+                else if (style.StartsWith("bd")) excelStyle.Border.Diagonal.Style = ToEnum<ExcelBorderStyle>(style.Substring(2));
+                else if (style.StartsWith("ba")) excelStyle.Border.BorderAround(ToEnum<ExcelBorderStyle>(style.Substring(2))); // add color option
                 else throw new InvalidOperationException($"{style} not defined");
             }
             else if (style.StartsWith("b") && excelDxfStyle != null)
             {
-                if (style.StartsWith("bl")) excelDxfStyle.Border.Left.Style = ParseBorderStyle(style.Substring(2));
-                else if (style.StartsWith("br")) excelDxfStyle.Border.Right.Style = ParseBorderStyle(style.Substring(2));
-                else if (style.StartsWith("bt")) excelDxfStyle.Border.Top.Style = ParseBorderStyle(style.Substring(2));
-                else if (style.StartsWith("bb")) excelDxfStyle.Border.Bottom.Style = ParseBorderStyle(style.Substring(2));
+                if (style.StartsWith("bl")) excelDxfStyle.Border.Left.Style = ToEnumNullable<ExcelBorderStyle>(style.Substring(2));
+                else if (style.StartsWith("br")) excelDxfStyle.Border.Right.Style = ToEnumNullable<ExcelBorderStyle>(style.Substring(2));
+                else if (style.StartsWith("bt")) excelDxfStyle.Border.Top.Style = ToEnumNullable<ExcelBorderStyle>(style.Substring(2));
+                else if (style.StartsWith("bb")) excelDxfStyle.Border.Bottom.Style = ToEnumNullable<ExcelBorderStyle>(style.Substring(2));
                 //else if (style == "bdU") excelDxfStyle.Border.DiagonalUp = true;
                 //else if (style == "bdu") excelDxfStyle.Border.DiagonalUp = false;
                 //else if (style == "bdD") excelDxfStyle.Border.DiagonalDown = true;
                 //else if (style == "bdd") excelDxfStyle.Border.DiagonalDown = false;
-                //else if (style.StartsWith("bd")) excelDxfStyle.Border.Diagonal.Style = ParseBorderStyle(style.Substring(2));
-                //else if (style.StartsWith("ba")) excelDxfStyle.Border.BorderAround(ParseBorderStyle(style.Substring(2))); // add color option
+                //else if (style.StartsWith("bd")) excelDxfStyle.Border.Diagonal.Style = ToEnum<ExcelBorderStyle>(style.Substring(2));
+                //else if (style.StartsWith("ba")) excelDxfStyle.Border.BorderAround(ToEnum<ExcelBorderStyle>(style.Substring(2))); // add color option
                 else throw new InvalidOperationException($"{style} not defined");
             }
             // horizontal-alignment
-            else if (style.StartsWith("ha") && excelStyle != null)
-            {
-                excelStyle.HorizontalAlignment = ParseHorizontalAlignment(style.Substring(2));
-            }
-            //else if (style.StartsWith("ha") && excelDxfStyle != null)
-            //{
-            //    excelDxfStyle.HorizontalAlignment = ParseHorizontalAlignment(style.Substring(2));
-            //}
+            else if (style.StartsWith("ha") && excelStyle != null) excelStyle.HorizontalAlignment = ToEnum<ExcelHorizontalAlignment>(style.Substring(2));
+            //else if (style.StartsWith("ha") && excelDxfStyle != null) { }
             // vertical-alignment
-            else if (style.StartsWith("va") && excelStyle != null)
-            {
-                excelStyle.VerticalAlignment = ParseVerticalAlignment(style.Substring(2));
-            }
-            //else if (style.StartsWith("va") && excelDxfStyle != null)
-            //{
-            //    excelDxfStyle.VerticalAlignment = ParseVerticalAlignment(style.Substring(2));
-            //}
+            else if (style.StartsWith("va") && excelStyle != null) excelStyle.VerticalAlignment = ToEnum<ExcelVerticalAlignment>(style.Substring(2));
+            //else if (style.StartsWith("va") && excelDxfStyle != null) { }
             // wrap-text
             else if (style.StartsWith("W") && excelStyle != null) excelStyle.WrapText = true;
             else if (style.StartsWith("w") && excelStyle != null) excelStyle.WrapText = false;
-            //else if (style.StartsWith("W") && excelDxfStyle != null) excelDxfStyle.WrapText = true;
-            //else if (style.StartsWith("w") && excelDxfStyle != null) excelDxfStyle.WrapText = false;
+            //else if (style.StartsWith("W") && excelDxfStyle != null) { }
+            //else if (style.StartsWith("w") && excelDxfStyle != null) { }
+            // reading-order
+            else if (style.StartsWith("ro") && excelStyle != null) excelStyle.ReadingOrder = ToEnum<ExcelReadingOrder>(style.Substring(2));
+            // shrink-to-fit
+            else if (style == "STF" && excelStyle != null) excelStyle.ShrinkToFit = true;
+            else if (style == "stf" && excelStyle != null) excelStyle.ShrinkToFit = false;
+            // indent
+            else if (style.StartsWith("i") && excelStyle != null) excelStyle.Indent = int.Parse(style.Substring(1));
+            // text-rotation
+            else if (style.StartsWith("tr") && excelStyle != null) excelStyle.TextRotation = int.Parse(style.Substring(2));
+            // locked
+            else if (style == "L" && excelStyle != null) excelStyle.Locked = true;
+            else if (style == "l" && excelStyle != null) excelStyle.Locked = false;
+            // hidden
+            else if (style == "H" && excelStyle != null) excelStyle.Hidden = true;
+            else if (style == "h" && excelStyle != null) excelStyle.Hidden = false;
+            // quote-prefix
+            else if (style == "QP" && excelStyle != null) excelStyle.QuotePrefix = true;
+            else if (style == "qp" && excelStyle != null) excelStyle.QuotePrefix = true;
             else throw new InvalidOperationException($"{style} not defined");
         }
 

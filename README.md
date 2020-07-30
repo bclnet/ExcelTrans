@@ -87,6 +87,7 @@ ColumnValue | Applies `.Value` of `.ValueKind` to the `.Col` column | [ColumnVal
 Command     | Executes `.Action()`
 CommandCol  | Executes `.Func()` per Column
 CommandRow  | Executes `.Func()` per Row
+CommandValue | Executes `.Func()` per Value
 ConditionalFormatting | Applies json `.Value` of `.FormattingKind` to `.Address` in range | [ConditionalFormattingKind](#conditionalformattingkind) [Conditionals](#conditional)
 Drawing     | Applies json `.Value` of `.DrawingKind` with `.Name` to `.Address` in range | [DrawingKind](#drawingkind) [Drawings](#drawings)
 Flush       | Flushes all pending commands
@@ -96,8 +97,7 @@ Protection  | Applies `.Value` of `.ProtectionKind` to current worksheet | [Prot
 PushFrame   | Pushes a new Frame with `cmds` onto the context stack
 PushSet     | Pushes a new Set with `group` and `cmds` onto the context stack
 RowValue    | Applies `.Value` of `.ValueKind` to the `.Row` row | [RowValueKind](#rowvaluekind)
-VbaCodeModule | Applies `.Code` of `.ModuleKind` with `.Name` to the VbaProject | [VbaModuleKind](#vbamodulekind)
-VbaModule   | Applies `.Code` with `.Name` to the VbaProject | [VbaCode](#vbacode)
+VbaModule   | Applies `.Code` of `.ModuleKind` to the VbaProject | [VbaModuleKind](#vbamodulekind)
 VbaReference | Adds `.Libraries` of type VbaLibrary to the VbaProject | [VbaLibrary](#vbalibrary)
 ViewAction  | Applies `.Value` of `.ActionKind` to the active spreadsheet | [ViewActionKind](#viewactionkind)
 WorkbookName   | Applies `.Name` range of `.NameKind` to the `.Cells` in range | [WorkbookNameKind](#workbooknamekind)
@@ -289,10 +289,11 @@ Libid           | LibraryId | LibID For more info check VbaLibrary.LibraryId
 
 Enum            | Description
 ---             | ---
-CodeModule      | Sets the Workbook VBA Module
-Module          | Adds a new VBA Module
-Class           | Adds a new VBA public class
-PrivateClass    | Adds a new VBA private class
+Get             | Gets or adds the VBA Module (Name:null for the Workbook VBA Module)
+CodeModule      | Gets the Workbook VBA Module
+AddModule       | Adds a new VBA Module
+AddClass        | Adds a new VBA public class
+AddPrivateClass | Adds a new VBA private class
 
 
 ## ViewActionKind
@@ -338,18 +339,7 @@ Formats for parsing string values.
 ## Drawing
 *Values for the Drawing command*
 
-
-### Styles : NumberformatPrec
-
-### Styles : VerticalAlignmentFont
-
-`n*`| The numberformat  | Description
---- | ---:              | ---
-none | *Format*          | Set the range to a specific value
-baseline | *NumberformatPrec* | Set the range to a specific value
-subscript | *NumberformatPrec* | Set the range to a specific value
-superscript | *NumberformatPrec* | Set the range to a specific value
-
+### Styles : Color
 
 ## Styles
 *Values for the CellStyle command*
@@ -364,11 +354,11 @@ nd  | ShortDatePattern  | Set the range to a specific value
 
 `f*`| Font styling      | Description
 --- | ---:              | ---
-f:* | *Font*            | The name of the font (style-only)
-fx* | *Size*            | The Size of the font (style-only)
-ff* | *Family*          | Font family (style-only)
-fc* | *Color*           | Cell color (style-only)
-fs* | *Scheme*          | Scheme (style-only)
+f:* | *Font*            | The name of the font
+fx* | *Size*            | The Size of the font
+ff* | *Family*          | Font family
+fc* | *Color*           | Cell color
+fs* | *Scheme*          | Scheme
 fB  | true              | Font-bold
 fb  | false             | Font-bold
 fI  | true              | Font-italic
@@ -378,38 +368,127 @@ fs  | false             | Font-Strikeout
 fU  | true              | Font-Underline
 fu  | false             | Font-Underline
 fu:* | *FontUnderline*  | Font-Underline Type
-fv* | *VerticalAlignmentFont* | Font-Vertical Align (style-only)
+- | *fu:None*           | No underline
+- | *fu:Single*         | Single underline
+- | *fu:Double*         | Double underline
+- | *fu:SingleAccounting* | Single line accounting. The underline is drawn under characters such as j and g
+- | *fu:DoubleAccounting* | Double line accounting. The underline is drawn under of characters such as j and g
+fv* | *VerticalAlignmentFont* | Font-Vertical Align
+- | *fvNone*            | None
+- | *fvBaseline*        | The text in the parent run will be located at the baseline and presented in the same size as surrounding text
+- | *fvSubscript*       | The text will be subscript.
+- | *fvSuperscript*     | The text will be superscript.
 
 `l*`| Fill styling      | Description
 --- | ---:              | ---
 lc* | *Color*           | The background color
 lf* | *FillStyle*       | The pattern for solid fills.
+- | *lfNone*            | No fill
+- | *lfSolid*           | A solid fill
+- | *lfDarkGray*        | Dark gray
+- | *lfMediumGray*      | Medium gray
+- | *lfLightGray*       | Light gray
+- | *lfGray125*         | Grayscale of 0.125, 1/8
+- | *lfGray0625*        | Grayscale of 0.0625, 1/16
+- | *lfDarkVertical*    | Dark vertical
+- | *lfDarkHorizontal*  | Dark horizontal
+- | *lfDarkDown*        | Dark down
+- | *lfDarkUp*          | Dark up
+- | *lfDarkGrid*        | Dark grid
+- | *lfDarkTrellis*     | Dark trellis
+- | *lfLightVertical*   | Light vertical
+- | *lfLightHorizontal* | Light horizontal
+- | *lfLightDown*       | Light down
+- | *lfLightUp*         | Light up
+- | *lfLightGrid*       | Light grid
+- | *lfLightTrellis*    | Light trellis
 
 `b*`| Border            | Description
 --- | ---:              | ---
 bl* | *BorderStyle*     | Left border style
+- | *lfNone*            | No border style
+- | *lfHair*            | Hairline
+- | *lfDotted*          | Dotted
+- | *lfDashDot*         | Dash Dot
+- | *lfThin*            | Thin single line
+- | *lfDashDotDot*      | Dash Dot Dot
+- | *lfDashed*          | Dashed
+- | *lfMediumDashDotDot* | Dash Dot Dot, medium thickness
+- | *lfMediumDashed*    | Dashed, medium thickness
+- | *lfMediumDashDot*   | Dash Dot, medium thickness
+- | *lfThick*           | Single line, Thick
+- | *lfMedium*          | Single line, medium thickness
+- | *lfDouble*          | Double line
 br* | *BorderStyle*     | Right border style
 bt* | *BorderStyle*     | Top border style
 bb* | *BorderStyle*     | Bottom border style
-bdU | true              | A diagonal from the bottom left to top right of the cell (style-only)
-bdu | false             | A diagonal from the bottom left to top right of the cell (style-only)
-bdD | true              | A diagonal from the top left to bottom right of the cell (style-only)
-bdd | false             | A diagonal from the top left to bottom right of the cell (style-only)
-bd* | *BorderStyle*     | Diagonal border style (style-only)
-ba* | *BorderStyle*     | Set the border style around the range. (style-only)
+bdU | true              | A diagonal from the bottom left to top right of the cell
+bdu | false             | A diagonal from the bottom left to top right of the cell
+bdD | true              | A diagonal from the top left to bottom right of the cell
+bdd | false             | A diagonal from the top left to bottom right of the cell
+bd* | *BorderStyle*     | Diagonal border style
+ba* | *BorderStyle*     | Set the border style around the range.
 
 `ha*`| Horizontal alignment | Description
 --- | ---:              | ---
-ha* | *HorizontalAlignment* | The horizontal alignment in the cell (style-only)
+ha* | *HorizontalAlignment* | The horizontal alignment in the cell
+- | *haGeneral*         | General aligned
+- | *haLeft*            | Left aligned
+- | *haCenter*          | Center aligned
+- | *haCenterContinuous* | The horizontal alignment is centered across multiple cells
+- | *haRight*           | Right aligned
+- | *haFill*            | The value of the cell should be filled across the entire width of the cell.
+- | *haDistributed*     | Each word in each line of text inside the cell is evenly distributed across the width of the cell
+- | *haJustify*         | The horizontal alignment is justified to the Left and Right for each row.
 
 `va*`| Vertical alignment | Description
 --- | ---:              | ---
-va* | *VerticalAlignment* | The vertical alignment in the cell (style-only)
+va* | *VerticalAlignment* | The vertical alignment in the cell
+- | *vaTop*             | Top aligned
+- | *vaCenter*          | Center aligned
+- | *vaBottom*          | Bottom aligned
+- | *vaDistributed*     | Distributed. Each line of text inside the cell is evenly distributed across the height of the cell
+- | *vaJustify*         | Justify. Each line of text inside the cell is evenly distributed across the height of the cell
 
-`*` | Style             | Description
+`*` | Wrap-Text         | Description
 --- | ---:              | ---
-W   | true              | Wrap the text (style-only)
-w   | false             | Wrap the text (style-only)
+W   | true              | Wrap the text
+w   | false             | Wrap the text
+
+`*` | Reading order     | Description
+--- | ---:              | ---
+ro  | *ReadingOrder*    | Readingorder
+- | *roContextDependent* | Reading order is determined by the first non-whitespace character
+- | *roLeftToRight*     | Left to Right
+- | *roRightToLeft*     | Right to Left
+
+`*` | Shrink to fit     | Description
+--- | ---:              | ---
+STF | true              | Shrink the text to fit
+stf | false             | Shrink the text to fit
+
+`*` | Indent            | Description
+--- | ---:              | ---
+i   | *Integer*         | The margin between the border and the text
+
+`*` | Text rotation     | Description
+--- | ---:              | ---
+tr  | *Integer*         | Text orientation in degrees. Values range from 0 to 180 or 255. Setting the rotation to 255 will align text vertically.
+
+`*` | Locked            | Description
+--- | ---:              | ---
+L   | true              | If true the cell is locked for editing when the sheet is protected
+l   | false             | If true the cell is locked for editing when the sheet is protected
+
+`*` | Hidden            | Description
+--- | ---:              | ---
+H   | true              | If true the formula is hidden when the sheet is protected
+h   | false             | If true the formula is hidden when the sheet is protected
+
+`*` | Quote prefix      | Description
+--- | ---:              | ---
+QP  | true              | If true the cell has a quote prefix, which indicates the value of the cell is text.
+qp  | false             | If true the cell has a quote prefix, which indicates the value of the cell is text.
 
 
 ## ValidationRules
@@ -465,7 +544,6 @@ v2:* | *Formula2.Value* | The value
 Flags           | Description
 ---             | ---
 Normal          | Normal operations.
-Formula         | Value should be considered a formula.
 Continue        | Continue to the next row.
 SkipCmds        | Skip processing the attached commands.
 
@@ -498,6 +576,7 @@ CsvY            | int           | Gets or sets the cursor CsvY coordinate, advan
 NextDirection   | *NextDirection* | Gets or sets the next direction.
 CmdRows         | *Stack`<CommandRow>`* | Gets the stack of commands per row.
 CmdCols         | *Stack`<CommandCol>`* | Gets the stack of commands per column.
+CmdValues       | *Stack`<CommandValue>`* | Gets the stack of commands per value.
 Sets            | *Stack`<IExcelSet>`* | Gets the stack of sets.
 Frames          | *Stack`<object>`* | Gets the stack of frames.
 Frame           | object        | Gets the current frame.

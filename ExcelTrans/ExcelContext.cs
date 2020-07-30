@@ -86,6 +86,13 @@ namespace ExcelTrans
         /// </value>
         Stack<CommandCol> CmdCols { get; }
         /// <summary>
+        /// Gets the stack of commands per value.
+        /// </summary>
+        /// <value>
+        /// The command values.
+        /// </value>
+        Stack<CommandValue> CmdValues { get; }
+        /// <summary>
         /// Gets the stack of sets.
         /// </summary>
         /// <value>
@@ -156,6 +163,7 @@ namespace ExcelTrans
         public NextDirection NextDirection { get; set; } = NextDirection.Column;
         public Stack<CommandRow> CmdRows { get; } = new Stack<CommandRow>();
         public Stack<CommandCol> CmdCols { get; } = new Stack<CommandCol>();
+        public Stack<CommandValue> CmdValues { get; } = new Stack<CommandValue>();
         public Stack<IExcelSet> Sets { get; } = new Stack<IExcelSet>();
         public Stack<object> Frames { get; } = new Stack<object>();
         public ExcelPackage P;
@@ -179,17 +187,19 @@ namespace ExcelTrans
             Frames.Clear();
             CommandRow.Flush(this, 0);
             CommandCol.Flush(this, 0);
+            CommandValue.Flush(this, 0);
             PopSet.Flush(this, 0);
         }
 
         public object Frame
         {
-            get => (CmdRows.Count, CmdCols.Count, Sets.Count);
+            get => (CmdRows.Count, CmdCols.Count, CmdValues.Count, Sets.Count);
             set
             {
-                var (rows, cols, sets) = ((int rows, int cols, int sets))value;
+                var (rows, cols, values, sets) = ((int rows, int cols, int values, int sets))value;
                 CommandRow.Flush(this, rows);
                 CommandCol.Flush(this, cols);
+                CommandValue.Flush(this, values);
                 PopSet.Flush(this, sets);
             }
         }

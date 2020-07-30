@@ -24,6 +24,13 @@ namespace ExcelTrans.Commands
         /// </value>
         public string Cells { get; private set; }
         /// <summary>
+        /// Gets or sets the type of the value.
+        /// </summary>
+        /// <value>
+        /// The type of the value.
+        /// </value>
+        public Type ValueType { get; set; }
+        /// <summary>
         /// Gets the value.
         /// </summary>
         /// <value>
@@ -38,24 +45,25 @@ namespace ExcelTrans.Commands
         /// </value>
         public CellValueKind ValueKind { get; private set; }
         /// <summary>
-        /// Gets or sets the type of the value.
+        /// Gets the value format.
         /// </summary>
         /// <value>
-        /// The type of the value.
+        /// The value format.
         /// </value>
-        public Type ValueType { get; set; }
+        public string ValueFormat { get; private set; }
 
         /// <summary>
-        /// Initializes a new instance of the <see cref="CellValue"/> struct.
+        /// Initializes a new instance of the <see cref="CellValue" /> struct.
         /// </summary>
         /// <param name="row">The row.</param>
         /// <param name="col">The col.</param>
         /// <param name="value">The value.</param>
         /// <param name="valueKind">Kind of the value.</param>
-        public CellValue(int row, int col, object value, CellValueKind valueKind = CellValueKind.Value)
-            : this(ExcelService.GetAddress(row, col), value, valueKind) { }
+        /// <param name="valueFormat">The value format.</param>
+        public CellValue(int row, int col, object value, CellValueKind valueKind = CellValueKind.Value, string valueFormat = null)
+            : this(ExcelService.GetAddress(row, col), value, valueKind, valueFormat) { }
         /// <summary>
-        /// Initializes a new instance of the <see cref="CellValue"/> struct.
+        /// Initializes a new instance of the <see cref="CellValue" /> struct.
         /// </summary>
         /// <param name="fromRow">From row.</param>
         /// <param name="fromCol">From col.</param>
@@ -63,28 +71,29 @@ namespace ExcelTrans.Commands
         /// <param name="toCol">To col.</param>
         /// <param name="value">The value.</param>
         /// <param name="valueKind">Kind of the value.</param>
-        public CellValue(int fromRow, int fromCol, int toRow, int toCol, object value, CellValueKind valueKind = CellValueKind.Value)
-            : this(ExcelService.GetAddress(fromRow, fromCol, toRow, toCol), value, valueKind) { }
+        /// <param name="valueFormat">The value format.</param>
+        public CellValue(int fromRow, int fromCol, int toRow, int toCol, object value, CellValueKind valueKind = CellValueKind.Value, string valueFormat = null)
+            : this(ExcelService.GetAddress(fromRow, fromCol, toRow, toCol), value, valueKind, valueFormat) { }
         /// <summary>
-        /// Initializes a new instance of the <see cref="CellValue"/> struct.
+        /// Initializes a new instance of the <see cref="CellValue" /> struct.
         /// </summary>
         /// <param name="r">The r.</param>
         /// <param name="value">The value.</param>
-        /// <param name="valueKind">Kind of the value.</param>
-        public CellValue(Address r, object value, CellValueKind valueKind = CellValueKind.Value)
-            : this(ExcelService.GetAddress(r, 0, 0), value, valueKind) { }
+        public CellValue(Address r, object value)
+            : this(ExcelService.GetAddress(r, 0, 0), value, CellValueKind.Value, null) { }
         /// <summary>
-        /// Initializes a new instance of the <see cref="CellValue"/> struct.
+        /// Initializes a new instance of the <see cref="CellValue" /> struct.
         /// </summary>
         /// <param name="r">The r.</param>
         /// <param name="row">The row.</param>
         /// <param name="col">The col.</param>
         /// <param name="value">The value.</param>
         /// <param name="valueKind">Kind of the value.</param>
-        public CellValue(Address r, int row, int col, object value, CellValueKind valueKind = CellValueKind.Value)
-            : this(ExcelService.GetAddress(r, row, col), value, valueKind) { }
+        /// <param name="valueFormat">The value format.</param>
+        public CellValue(Address r, int row, int col, object value, CellValueKind valueKind = CellValueKind.Value, string valueFormat = null)
+            : this(ExcelService.GetAddress(r, row, col), value, valueKind, valueFormat) { }
         /// <summary>
-        /// Initializes a new instance of the <see cref="CellValue"/> struct.
+        /// Initializes a new instance of the <see cref="CellValue" /> struct.
         /// </summary>
         /// <param name="r">The r.</param>
         /// <param name="fromRow">From row.</param>
@@ -93,41 +102,46 @@ namespace ExcelTrans.Commands
         /// <param name="toCol">To col.</param>
         /// <param name="value">The value.</param>
         /// <param name="valueKind">Kind of the value.</param>
-        public CellValue(Address r, int fromRow, int fromCol, int toRow, int toCol, object value, CellValueKind valueKind = CellValueKind.Value)
-            : this(ExcelService.GetAddress(r, fromRow, fromCol, toRow, toCol), value, valueKind) { }
+        /// <param name="valueFormat">The value format.</param>
+        public CellValue(Address r, int fromRow, int fromCol, int toRow, int toCol, object value, CellValueKind valueKind = CellValueKind.Value, string valueFormat = null)
+            : this(ExcelService.GetAddress(r, fromRow, fromCol, toRow, toCol), value, valueKind, valueFormat) { }
         /// <summary>
-        /// Initializes a new instance of the <see cref="CellValue"/> struct.
+        /// Initializes a new instance of the <see cref="CellValue" /> struct.
         /// </summary>
         /// <param name="cells">The cells.</param>
         /// <param name="value">The value.</param>
         /// <param name="valueKind">Kind of the value.</param>
+        /// <param name="valueFormat">The value format.</param>
         /// <exception cref="ArgumentNullException">cells</exception>
-        public CellValue(string cells, object value, CellValueKind valueKind = CellValueKind.Value)
+        public CellValue(string cells, object value, CellValueKind valueKind = CellValueKind.Value, string valueFormat = null)
         {
             When = When.Normal;
             Cells = cells ?? throw new ArgumentNullException(nameof(cells));
-            ValueKind = valueKind;
             ValueType = value?.GetType();
             Value = value?.SerializeValue(ValueType);
+            ValueKind = valueKind;
+            ValueFormat = valueFormat;
         }
 
         void IExcelCommand.Read(BinaryReader r)
         {
             Cells = r.ReadString();
+            ValueType = r.ReadBoolean() ? Type.GetType(r.ReadString()) : null;
             Value = r.ReadBoolean() ? r.ReadString() : null;
             ValueKind = (CellValueKind)r.ReadInt32();
-            ValueType = r.ReadBoolean() ? Type.GetType(r.ReadString()) : null;
+            ValueFormat = r.ReadBoolean() ? r.ReadString() : null;
         }
 
         void IExcelCommand.Write(BinaryWriter w)
         {
             w.Write(Cells);
+            w.Write(ValueType != null); if (ValueType != null) w.Write(ValueType.ToString());
             w.Write(Value != null); if (Value != null) w.Write(Value);
             w.Write((int)ValueKind);
-            w.Write(ValueType != null); if (ValueType != null) w.Write(ValueType.ToString());
+            w.Write(ValueFormat != null); if (ValueFormat != null) w.Write(ValueFormat);
         }
 
-        void IExcelCommand.Execute(IExcelContext ctx, ref Action after) => ctx.CellValue(Cells, Value?.DeserializeValue(ValueType), ValueKind);
+        void IExcelCommand.Execute(IExcelContext ctx, ref Action after) => ctx.CellValue(Cells, Value?.DeserializeValue(ValueType), ValueKind, ValueFormat);
 
         void IExcelCommand.Describe(StringWriter w, int pad) { w.WriteLine($"{new string(' ', pad)}CellValue[{ExcelService.DescribeAddress(Cells)}]: {Value}{(ValueKind == CellValueKind.Value ? null : $" - {ValueKind}")}"); }
     }
