@@ -1,7 +1,7 @@
 ﻿using ExcelTrans.Commands;
 using ExcelTrans.Services;
 using NUnit.Framework;
-using System;
+using OfficeOpenXml;
 using System.Collections.Generic;
 using System.IO;
 
@@ -9,6 +9,8 @@ namespace ExcelTrans
 {
     public class IntegrationTest
     {
+        static IntegrationTest() => ExcelPackage.LicenseContext = LicenseContext.NonCommercial;
+
         static (Stream stream, string meta, string path) MakeInvoiceFile(IEnumerable<MyData> myData)
         {
             var transform = ExcelService.Encode(new List<IExcelCommand>

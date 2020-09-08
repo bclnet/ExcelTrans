@@ -2,11 +2,13 @@
 using ExcelTrans.Commands;
 using NFluent;
 using NUnit.Framework;
+using OfficeOpenXml;
 
 namespace ExcelTrans
 {
     public class ExcelServiceTest
     {
+        static ExcelServiceTest() => ExcelPackage.LicenseContext = LicenseContext.NonCommercial;
         IExcelCommand[] _simpleCmds;
         IExcelContext _excelContext;
 

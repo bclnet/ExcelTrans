@@ -9,9 +9,9 @@ using System.Reflection;
 namespace ExcelTrans.Services
 {
     /// <summary>
-    /// CsvWriterSettings
+    /// CsvWriterOptions
     /// </summary>
-    public class CsvWriterSettings
+    public class CsvWriterOptions
     {
         /// <summary>
         /// WriteFilterMode
@@ -103,9 +103,9 @@ namespace ExcelTrans.Services
         }
 
         /// <summary>
-        /// DefaultContext
+        /// Default
         /// </summary>
-        public static readonly CsvWriterSettings DefaultSettings = new CsvWriterSettings { };
+        public static readonly CsvWriterOptions Default = new CsvWriterOptions { };
 
         /// <summary>
         /// Gets or sets the <see cref="System.Boolean"/> with the specified option.

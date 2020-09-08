@@ -198,31 +198,7 @@ namespace ExcelTrans
         /// <param name="valueKind">Kind of the value.</param>
         /// <param name="valueFormat">The value format.</param>
         /// <exception cref="ArgumentOutOfRangeException">valueKind</exception>
-        public static void WriteValue(this IExcelContext ctx, ExcelRangeBase range, object val, CellValueKind valueKind, string valueFormat = null)
-        {
-            var text = val is string z ? z : val.ToString();
-            if (text != null && valueFormat != null)
-                text = string.Format(valueFormat, text);
-            switch (valueKind)
-            {
-                case CellValueKind.Value: case CellValueKind.Text: range.Value = val is string ? text : val; break;
-                case CellValueKind.AutoFilter: range.AutoFilter = val.CastValue<bool>(); break;
-                case CellValueKind.AutoFitColumns: range.AutoFitColumns(); break;
-                case CellValueKind.Comment: range.Comment.Text = text; break;
-                //case CellValueKind.CommentMore: break;
-                //case CellValueKind.ConditionalFormattingMore: break;
-                case CellValueKind.Copy: var range2 = ((ExcelContext)ctx).WS.Cells[ctx.DecodeAddress(text)]; range.Copy(range2); break;
-                case CellValueKind.Formula: range.Formula = text; break;
-                case CellValueKind.FormulaR1C1: range.FormulaR1C1 = text; break;
-                case CellValueKind.Hyperlink: range.Hyperlink = new Uri(text); break;
-                case CellValueKind.Merge: range.Merge = val.CastValue<bool>(); break;
-                case CellValueKind.RichText: range.RichText.Add(text); break;
-                case CellValueKind.RichTextClear: range.RichText.Clear(); break;
-                case CellValueKind.StyleName: range.StyleName = text; break;
-                default: throw new ArgumentOutOfRangeException(nameof(valueKind));
-            }
-            if (val is DateTime) range.Style.Numberformat.Format = DateTimeFormatInfo.CurrentInfo.ShortDatePattern;
-        }
+        public static void WriteValue(this IExcelContext ctx, ExcelRangeBase range, object val, CellValueKind valueKind, string valueFormat = null) => ctx.SetCellValue(range, val, valueKind, valueFormat);
 
         /// <summary>
         /// Writes the row last.
@@ -551,7 +527,7 @@ namespace ExcelTrans
             var view = ((ExcelContext)ctx).WS.View;
             switch (actionKind)
             {
-                case ViewActionKind.FreezePane: ExcelService.CellToInts((string)value, out var row, out var col); view.FreezePanes(row, col); break;
+                case ViewActionKind.FreezePane: ExcelService.CellToInts((string)value, out var row, out var col); view.FreezePanes(row + 1, col + 1); break;
                 case ViewActionKind.SetTabSelected: view.SetTabSelected(); break;
                 case ViewActionKind.UnfreezePane: view.UnFreezePanes(); break;
                 default: throw new ArgumentOutOfRangeException(nameof(actionKind));
@@ -952,19 +928,70 @@ namespace ExcelTrans
             var range = ctx.Get(cells);
             switch (valueKind)
             {
+                case CellValueKind.StyleName: return range.StyleName;
+                case CellValueKind.StyleID: return range.StyleID;
                 case CellValueKind.Value: return range.Value;
                 case CellValueKind.Text: return range.Text;
-                case CellValueKind.AutoFilter: return range.AutoFilter;
-                case CellValueKind.Comment: return range.Comment.Text;
-                //case CellValueKind.ConditionalFormattingMore: return null;
-                case CellValueKind.DataValidation: return range.DataValidation; // get-only
                 case CellValueKind.Formula: return range.Formula;
                 case CellValueKind.FormulaR1C1: return range.FormulaR1C1;
                 case CellValueKind.Hyperlink: return range.Hyperlink;
                 case CellValueKind.Merge: return range.Merge;
-                case CellValueKind.StyleName: return range.StyleName;
+                case CellValueKind.AutoFilter: return range.AutoFilter;
+                case CellValueKind.AutoFitColumns: return null;
+                case CellValueKind.ArrayFormula: return range.IsArrayFormula;
+                case CellValueKind.IsRichText: return range.IsRichText;
+                case CellValueKind.RichText: return range.RichText;
+                case CellValueKind.RichTextClear: return null;
+                case CellValueKind.AddComment: return null;
+                case CellValueKind.Comment: return range.Comment;
+                case CellValueKind.ThreadedComment: return range.ThreadedComment;
+                case CellValueKind.ConditionalFormatting: return range.ConditionalFormatting;
+                case CellValueKind.Copy: return null;
+                case CellValueKind.DataValidation: return range.DataValidation; // get-only
                 default: throw new ArgumentOutOfRangeException(nameof(valueKind));
             }
+        }
+
+        /// <summary>
+        /// Sets the cell value.
+        /// </summary>
+        /// <param name="ctx">The CTX.</param>
+        /// <param name="range">The range.</param>
+        /// <param name="value">The value.</param>
+        /// <param name="valueKind">Kind of the value.</param>
+        /// <param name="valueFormat">The value format.</param>
+        /// <exception cref="ArgumentOutOfRangeException">valueKind</exception>
+        public static void SetCellValue(this IExcelContext ctx, ExcelRangeBase range, object value, CellValueKind valueKind, string valueFormat = null)
+        {
+            var text = value != null ? value is string z ? z : value.ToString() : null;
+            if (text != null && valueFormat != null)
+                text = string.Format(valueFormat, text);
+            switch (valueKind)
+            {
+                case CellValueKind.StyleName: range.StyleName = text; break;
+                case CellValueKind.StyleID: range.StyleID = value.CastValue<int>(); break;
+                case CellValueKind.Value: case CellValueKind.Text: range.Value = value is string ? text : value; break;
+                case CellValueKind.Formula: range.Formula = text; break;
+                case CellValueKind.FormulaR1C1: range.FormulaR1C1 = text; break;
+                case CellValueKind.Hyperlink: range.Hyperlink = new Uri(text); break;
+                case CellValueKind.Merge: range.Merge = value.CastValue<bool>(); break;
+                case CellValueKind.AutoFilter: range.AutoFilter = value.CastValue<bool>(); break;
+                case CellValueKind.AutoFitColumns: range.AutoFitColumns(); break;
+                case CellValueKind.ArrayFormula: range.CreateArrayFormula(text); break;
+                case CellValueKind.IsRichText: range.IsRichText.CastValue<bool>(); break;
+                case CellValueKind.RichText: range.RichText.Add(text); break;
+                case CellValueKind.RichTextClear: range.RichText.Clear(); break;
+                case CellValueKind.AddComment: range.AddComment(text, ExcelService.Author); break;
+                case CellValueKind.Comment:
+                    if (range.Comment == null) range.AddComment(text, ExcelService.Author);
+                    else range.Comment.Text = text; break;
+                case CellValueKind.ThreadedComment: range.ThreadedComment.AddComment(null, text); break;
+                case CellValueKind.ConditionalFormatting: break;
+                case CellValueKind.Copy: var range2 = ((ExcelContext)ctx).WS.Cells[ctx.DecodeAddress(text)]; range.Copy(range2); break;
+                case CellValueKind.DataValidation: break;
+                default: throw new ArgumentOutOfRangeException(nameof(valueKind));
+            }
+            if (value is DateTime) range.Style.Numberformat.Format = DateTimeFormatInfo.CurrentInfo.ShortDatePattern;
         }
 
         #endregion
@@ -1909,7 +1936,7 @@ namespace ExcelTrans
 
         static void ApplyStyle(string style, ExcelStyle excelStyle, ExcelDxfStyleConditionalFormatting excelDxfStyle)
         {
-            string NumberformatPrec(string prec, string defaultPrec) => string.IsNullOrEmpty(prec) ? defaultPrec : $"0.{new string('0', int.Parse(prec))}";
+            string NumberformatPrec(string prec, string defaultPrec) => string.IsNullOrEmpty(prec) || !int.TryParse(prec, out var z) ? defaultPrec : z <= 0 ? "0" : $"0.{new string('0', z)}";
 
             // https://support.office.com/en-us/article/number-format-codes-5026bbd6-04bc-48cd-bf33-80f18b4eae68
             // number-format

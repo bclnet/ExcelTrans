@@ -46,6 +46,8 @@ namespace ExcelTrans.Commands
         /// <param name="actionKind">Kind of the action.</param>
         public ViewAction(string value, ViewActionKind actionKind)
         {
+            if (value == "#REF!")
+                throw new ArgumentOutOfRangeException(nameof(value));
             When = When.Normal;
             Value = value;
             ActionKind = actionKind;

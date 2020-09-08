@@ -41,7 +41,7 @@ value1|value2"));
             // given
             var stream = _pipeDelimitedStream;
             // when
-            var doc = CsvReader.Read(stream, x => x.ToArray(), settings: new CsvReaderSettings { Delimiter = "|" }).ToList();
+            var doc = CsvReader.Read(stream, x => x.ToArray(), options: new CsvReaderOptions { Delimiter = "|" }).ToList();
             // then
             Check.That(doc).CountIs(2);
             Check.That(doc.ElementAt(0)).IsEquivalentTo(new[] { "One", "Two" });

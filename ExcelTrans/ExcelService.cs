@@ -14,6 +14,7 @@ namespace ExcelTrans
     /// </summary>
     public static class ExcelService
     {
+        public static string Author = "S";
         /// <summary>
         /// The comment
         /// </summary>

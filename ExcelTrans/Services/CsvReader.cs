@@ -46,14 +46,14 @@ namespace ExcelTrans.Services
         /// <param name="reader">The reader instance.</param>
         /// <param name="action">The logic to execute.</param>
         /// <exception cref="System.ArgumentNullException">If the reader instance is null</exception>
-        public static IEnumerable<T> Read<T>(Stream stream, Func<Collection<string>, T> action, int startRow = 0, CsvReaderSettings settings = null)
+        public static IEnumerable<T> Read<T>(Stream stream, Func<Collection<string>, T> action, int startRow = 0, CsvReaderOptions options = null)
         {
             if (stream == null)
                 throw new ArgumentNullException(nameof(stream));
             if (action == null)
                 throw new ArgumentNullException(nameof(action));
 
-            var delimiter = settings?.Delimiter[0] ?? ',';
+            var delimiter = options?.Delimiter[0] ?? ',';
             var reader = new StreamReader(stream);
             string line;
             while ((line = reader.ReadLine()) != null)

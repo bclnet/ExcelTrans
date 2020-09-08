@@ -124,8 +124,8 @@ namespace ExcelTrans.Commands
             if (Group != null)
                 foreach (var g in Group(ctx, _set.Skip(TakeY + SkipY)))
                 {
-                    ctx.WriteRowFirst(null);
                     var frame = ctx.ExecuteCmd(Cmds(ctx, g), out var action);
+                    ctx.WriteRowFirst(null);
                     ctx.CsvY = 0;
                     foreach (var v in takeY)
                     {

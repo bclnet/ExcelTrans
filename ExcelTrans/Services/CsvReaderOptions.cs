@@ -4,9 +4,9 @@ using System.Globalization;
 namespace ExcelTrans.Services
 {
     /// <summary>
-    /// Class CsvReaderSettings.
+    /// Class CsvReaderOptions.
     /// </summary>
-    public class CsvReaderSettings
+    public class CsvReaderOptions
     {
         string _delimiter;
 

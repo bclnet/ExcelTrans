@@ -43,7 +43,7 @@ namespace ExcelTrans.Services
             // given
             var b = new StringBuilder();
             // when
-            CsvWriter.Write(new StringWriter(b), _testItems, settings: new CsvWriterSettings { Delimiter = "|" });
+            CsvWriter.Write(new StringWriter(b), _testItems, options: new CsvWriterOptions { Delimiter = "|" });
             var doc = b.ToString();
             // then
             Check.That(doc).IsEqualTo(
@@ -59,7 +59,7 @@ namespace ExcelTrans.Services
             // given
             var b = new StringBuilder();
             // when
-            CsvWriter.Write(new StringWriter(b), _testItems, settings: new CsvWriterSettings { HasHeaderRow = false });
+            CsvWriter.Write(new StringWriter(b), _testItems, options: new CsvWriterOptions { HasHeaderRow = false });
             var doc = b.ToString();
             // then
             Check.That(doc).IsEqualTo(

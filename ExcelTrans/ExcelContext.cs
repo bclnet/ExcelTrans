@@ -15,6 +15,7 @@ namespace ExcelTrans
     /// <seealso cref="System.IDisposable" />
     public interface IExcelContext : IDisposable
     {
+        object this[int row, int col] { get; set; }
         /// <summary>
         /// Gets or sets where the cursor X starts per row.
         /// </summary>
@@ -124,6 +125,15 @@ namespace ExcelTrans
         /// <returns></returns>
         ExcelRangeBase Get(string cells);
         /// <summary>
+        /// Gets the specified row.
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="row">The row.</param>
+        /// <param name="col">The col.</param>
+        /// <param name="defaultValue">The default value.</param>
+        /// <returns></returns>
+        T Get<T>(int row, int col, T defaultValue = default);
+        /// <summary>
         /// Advances the cursor based on NextDirection.
         /// </summary>
         /// <param name="range">The range.</param>
@@ -153,6 +163,12 @@ namespace ExcelTrans
         }
         public void Dispose() => P.Dispose();
 
+        public object this[int row, int col]
+        {
+            get => this.GetCellValue(row, col);
+            set => this.CellValue(row, col, value);
+        }
+
         public int XStart { get; set; } = 1;
         public int X { get; set; } = 1;
         public int Y { get; set; } = 1;
@@ -176,6 +192,7 @@ namespace ExcelTrans
         public ExcelWorksheet EnsureWorksheet() => WS ?? (WS = WB.Worksheets.Add($"Sheet {WB.Worksheets.Count + 1}"));
 
         public ExcelRangeBase Get(string cells) => WS.Cells[this.DecodeAddress(cells)];
+        public T Get<T>(int row, int col, T defaultValue = default) => this.GetCellValue(row, col) is T value ? value : defaultValue;
 
         public ExcelRangeBase Next(ExcelRangeBase range, NextDirection? nextDirection = null) => (nextDirection ?? NextDirection) == NextDirection.Column ? range.Offset(0, DeltaX) : range.Offset(DeltaY, 0);
         public ExcelColumn Next(ExcelColumn col) => throw new NotImplementedException();

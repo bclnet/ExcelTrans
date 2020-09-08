@@ -131,20 +131,26 @@ TimeValidation  | Adds an IExcelDataValidationTime to the worksheet. The only ac
 
 Enum            | Description
 ---             | ---
+StyleName       | The named style
+StyleID         | The style ID. It is not recomended to use this one.
 Value           | Set the range to a specific value
 Text            | Returns the formatted value.
-AutoFilter      | Set an autofilter for the range
-AutoFitColumns  | Set the column width from the content of the range. The minimum width is the value of the ExcelWorksheet.defaultColumnWidth property. Note: Cells containing formulas must be calculated before autofit is called. Wrapped and merged cells are also ignored. (set-only)
-Comment         | The comment text
-Copy            | Copies the range of cells to an other range
-DataValidation  | Data validation for this range (get-only)
 Formula         | Gets or sets a formula for a range.
 FormulaR1C1     | Gets or Set a formula in R1C1 format.
 Hyperlink       | Set the hyperlink property for a range of cells
 Merge           | If the cells in the range are merged.
+AutoFilter      | Set an autofilter for the range
+AutoFitColumns  | Set the column width from the content of the range. The minimum width is the value of the ExcelWorksheet.defaultColumnWidth property. Note: Cells containing formulas must be calculated before autofit is called. Wrapped and merged cells are also ignored. (set-only)
+ArrayFormula    | An array-formula
+IsRichText      | If the value is in richtext format.
 RichText        | Add a rich text string
 RichTextClear   | Clear the collection
-StyleName       | The named style
+AddComment      | Adds a new comment for the range
+Comment         | The comment
+ThreadedComment | Returns the threaded comment object of the first cell in the range
+ConditionalFormatting | Conditional Formatting for this range.
+Copy            | Copies the range of cells to an other range
+DataValidation  | Data validation for this range (get-only)
 
 
 ## ColumnValueKind
@@ -368,57 +374,57 @@ fs  | false             | Font-Strikeout
 fU  | true              | Font-Underline
 fu  | false             | Font-Underline
 fu:* | *FontUnderline*  | Font-Underline Type
-- | *fu:None*           | No underline
-- | *fu:Single*         | Single underline
-- | *fu:Double*         | Double underline
-- | *fu:SingleAccounting* | Single line accounting. The underline is drawn under characters such as j and g
-- | *fu:DoubleAccounting* | Double line accounting. The underline is drawn under of characters such as j and g
+. | *fu:None*           | No underline
+. | *fu:Single*         | Single underline
+. | *fu:Double*         | Double underline
+. | *fu:SingleAccounting* | Single line accounting. The underline is drawn under characters such as j and g
+. | *fu:DoubleAccounting* | Double line accounting. The underline is drawn under of characters such as j and g
 fv* | *VerticalAlignmentFont* | Font-Vertical Align
-- | *fvNone*            | None
-- | *fvBaseline*        | The text in the parent run will be located at the baseline and presented in the same size as surrounding text
-- | *fvSubscript*       | The text will be subscript.
-- | *fvSuperscript*     | The text will be superscript.
+. | *fvNone*            | None
+. | *fvBaseline*        | The text in the parent run will be located at the baseline and presented in the same size as surrounding text
+. | *fvSubscript*       | The text will be subscript.
+. | *fvSuperscript*     | The text will be superscript.
 
 `l*`| Fill styling      | Description
 --- | ---:              | ---
 lc* | *Color*           | The background color
 lf* | *FillStyle*       | The pattern for solid fills.
-- | *lfNone*            | No fill
-- | *lfSolid*           | A solid fill
-- | *lfDarkGray*        | Dark gray
-- | *lfMediumGray*      | Medium gray
-- | *lfLightGray*       | Light gray
-- | *lfGray125*         | Grayscale of 0.125, 1/8
-- | *lfGray0625*        | Grayscale of 0.0625, 1/16
-- | *lfDarkVertical*    | Dark vertical
-- | *lfDarkHorizontal*  | Dark horizontal
-- | *lfDarkDown*        | Dark down
-- | *lfDarkUp*          | Dark up
-- | *lfDarkGrid*        | Dark grid
-- | *lfDarkTrellis*     | Dark trellis
-- | *lfLightVertical*   | Light vertical
-- | *lfLightHorizontal* | Light horizontal
-- | *lfLightDown*       | Light down
-- | *lfLightUp*         | Light up
-- | *lfLightGrid*       | Light grid
-- | *lfLightTrellis*    | Light trellis
+. | *lfNone*            | No fill
+. | *lfSolid*           | A solid fill
+. | *lfDarkGray*        | Dark gray
+. | *lfMediumGray*      | Medium gray
+. | *lfLightGray*       | Light gray
+. | *lfGray125*         | Grayscale of 0.125, 1/8
+. | *lfGray0625*        | Grayscale of 0.0625, 1/16
+. | *lfDarkVertical*    | Dark vertical
+. | *lfDarkHorizontal*  | Dark horizontal
+. | *lfDarkDown*        | Dark down
+. | *lfDarkUp*          | Dark up
+. | *lfDarkGrid*        | Dark grid
+. | *lfDarkTrellis*     | Dark trellis
+. | *lfLightVertical*   | Light vertical
+. | *lfLightHorizontal* | Light horizontal
+. | *lfLightDown*       | Light down
+. | *lfLightUp*         | Light up
+. | *lfLightGrid*       | Light grid
+. | *lfLightTrellis*    | Light trellis
 
 `b*`| Border            | Description
 --- | ---:              | ---
 bl* | *BorderStyle*     | Left border style
-- | *lfNone*            | No border style
-- | *lfHair*            | Hairline
-- | *lfDotted*          | Dotted
-- | *lfDashDot*         | Dash Dot
-- | *lfThin*            | Thin single line
-- | *lfDashDotDot*      | Dash Dot Dot
-- | *lfDashed*          | Dashed
-- | *lfMediumDashDotDot* | Dash Dot Dot, medium thickness
-- | *lfMediumDashed*    | Dashed, medium thickness
-- | *lfMediumDashDot*   | Dash Dot, medium thickness
-- | *lfThick*           | Single line, Thick
-- | *lfMedium*          | Single line, medium thickness
-- | *lfDouble*          | Double line
+. | *lfNone*            | No border style
+. | *lfHair*            | Hairline
+. | *lfDotted*          | Dotted
+. | *lfDashDot*         | Dash Dot
+. | *lfThin*            | Thin single line
+. | *lfDashDotDot*      | Dash Dot Dot
+. | *lfDashed*          | Dashed
+. | *lfMediumDashDotDot* | Dash Dot Dot, medium thickness
+. | *lfMediumDashed*    | Dashed, medium thickness
+. | *lfMediumDashDot*   | Dash Dot, medium thickness
+. | *lfThick*           | Single line, Thick
+. | *lfMedium*          | Single line, medium thickness
+. | *lfDouble*          | Double line
 br* | *BorderStyle*     | Right border style
 bt* | *BorderStyle*     | Top border style
 bb* | *BorderStyle*     | Bottom border style
@@ -432,23 +438,23 @@ ba* | *BorderStyle*     | Set the border style around the range.
 `ha*`| Horizontal alignment | Description
 --- | ---:              | ---
 ha* | *HorizontalAlignment* | The horizontal alignment in the cell
-- | *haGeneral*         | General aligned
-- | *haLeft*            | Left aligned
-- | *haCenter*          | Center aligned
-- | *haCenterContinuous* | The horizontal alignment is centered across multiple cells
-- | *haRight*           | Right aligned
-- | *haFill*            | The value of the cell should be filled across the entire width of the cell.
-- | *haDistributed*     | Each word in each line of text inside the cell is evenly distributed across the width of the cell
-- | *haJustify*         | The horizontal alignment is justified to the Left and Right for each row.
+. | *haGeneral*         | General aligned
+. | *haLeft*            | Left aligned
+. | *haCenter*          | Center aligned
+. | *haCenterContinuous* | The horizontal alignment is centered across multiple cells
+. | *haRight*           | Right aligned
+. | *haFill*            | The value of the cell should be filled across the entire width of the cell.
+. | *haDistributed*     | Each word in each line of text inside the cell is evenly distributed across the width of the cell
+. | *haJustify*         | The horizontal alignment is justified to the Left and Right for each row.
 
 `va*`| Vertical alignment | Description
 --- | ---:              | ---
 va* | *VerticalAlignment* | The vertical alignment in the cell
-- | *vaTop*             | Top aligned
-- | *vaCenter*          | Center aligned
-- | *vaBottom*          | Bottom aligned
-- | *vaDistributed*     | Distributed. Each line of text inside the cell is evenly distributed across the height of the cell
-- | *vaJustify*         | Justify. Each line of text inside the cell is evenly distributed across the height of the cell
+. | *vaTop*             | Top aligned
+. | *vaCenter*          | Center aligned
+. | *vaBottom*          | Bottom aligned
+. | *vaDistributed*     | Distributed. Each line of text inside the cell is evenly distributed across the height of the cell
+. | *vaJustify*         | Justify. Each line of text inside the cell is evenly distributed across the height of the cell
 
 `*` | Wrap-Text         | Description
 --- | ---:              | ---
@@ -458,9 +464,9 @@ w   | false             | Wrap the text
 `*` | Reading order     | Description
 --- | ---:              | ---
 ro  | *ReadingOrder*    | Readingorder
-- | *roContextDependent* | Reading order is determined by the first non-whitespace character
-- | *roLeftToRight*     | Left to Right
-- | *roRightToLeft*     | Right to Left
+. | *roContextDependent* | Reading order is determined by the first non-whitespace character
+. | *roLeftToRight*     | Left to Right
+. | *roRightToLeft*     | Right to Left
 
 `*` | Shrink to fit     | Description
 --- | ---:              | ---

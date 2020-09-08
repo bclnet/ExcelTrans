@@ -1,9 +1,4 @@
-﻿using System.Linq;
-using ExcelTrans.Commands;
-using NFluent;
-using NUnit.Framework;
-
-namespace ExcelTrans
+﻿namespace ExcelTrans
 {
     public class ExcelExtensionsTest
     {

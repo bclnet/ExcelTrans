@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
-using WriteOptions = ExcelTrans.Services.CsvWriterSettings.WriteOptions;
+using WriteOptions = ExcelTrans.Services.CsvWriterOptions.WriteOptions;
 
 namespace ExcelTrans.Services
 {
@@ -18,23 +18,23 @@ namespace ExcelTrans.Services
         /// <typeparam name="TItem">The type of the item.</typeparam>
         /// <param name="w">The w.</param>
         /// <param name="set">The set.</param>
-        /// <param name="settings">The context.</param>
-        public static void Write<TItem>(TextWriter w, IEnumerable<TItem> set, CsvWriterSettings settings = null)
+        /// <param name="options">The context.</param>
+        public static void Write<TItem>(TextWriter w, IEnumerable<TItem> set, CsvWriterOptions options = null)
         {
             if (w == null)
                 throw new ArgumentNullException(nameof(w));
             if (set == null)
                 throw new ArgumentNullException(nameof(set));
 
-            if (settings == null)
-                settings = CsvWriterSettings.DefaultSettings;
-            var delimiter = settings.Delimiter[0];
-            var hasHeaderRow = (settings.EmitOptions & WriteOptions.HasHeaderRow) != 0;
-            var encodeValues = (settings.EmitOptions & WriteOptions.EncodeValues) != 0;
-            var columns = settings.GetColumns != null ? settings.GetColumns(typeof(TItem)) : CsvWriterSettings.GetColumnsByType(typeof(TItem), hasHeaderRow);
+            if (options == null)
+                options = CsvWriterOptions.Default;
+            var delimiter = options.Delimiter[0];
+            var hasHeaderRow = (options.EmitOptions & WriteOptions.HasHeaderRow) != 0;
+            var encodeValues = (options.EmitOptions & WriteOptions.EncodeValues) != 0;
+            var columns = options.GetColumns != null ? options.GetColumns(typeof(TItem)) : CsvWriterOptions.GetColumnsByType(typeof(TItem), hasHeaderRow);
 
             // header
-            var fields = settings.Fields.Count > 0 ? settings.Fields : null;
+            var fields = options.Fields.Count > 0 ? options.Fields : null;
             var b = new StringBuilder();
             if (hasHeaderRow)
             {
@@ -55,9 +55,9 @@ namespace ExcelTrans.Services
             // rows
             try
             {
-                foreach (var group in set.Cast<object>().GroupAt(settings.FlushAt))
+                foreach (var group in set.Cast<object>().GroupAt(options.FlushAt))
                 {
-                    var newGroup = settings.BeforeFlush == null ? group : settings.BeforeFlush(group);
+                    var newGroup = options.BeforeFlush == null ? group : options.BeforeFlush(group);
                     if (newGroup == null)
                         return;
                     foreach (var item in newGroup)
