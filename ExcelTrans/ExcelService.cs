@@ -78,20 +78,21 @@ namespace ExcelTrans
         /// Transforms the specified value.
         /// </summary>
         /// <param name="value">The value.</param>
+        /// <param name="allowMacros">if set to <c>true</c> [allow macros].</param>
         /// <returns></returns>
-        public static (Stream stream, string, string path) Transform((Stream stream, string, string path) value)
+        public static (Stream stream, string, string path) Transform((Stream stream, string, string path) value, bool macrosDisabled = false)
         {
             using (var s1 = value.stream)
             {
                 s1.Seek(0, SeekOrigin.Begin);
-                var s2 = new MemoryStream(Build(s1, out var macros));
+                var s2 = new MemoryStream(Build(s1, macrosDisabled, out var macros));
                 return (s2, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", value.path.Replace(".csv", !macros ? ".xlsx" : ".xlsm"));
             }
         }
 
-        static byte[] Build(Stream s, out bool macros)
+        static byte[] Build(Stream s, bool macrosDisabled, out bool macros)
         {
-            using (var ctx = new ExcelContext())
+            using (var ctx = new ExcelContext(macrosDisabled))
             {
                 CsvReader.Read(s, x =>
                 {
@@ -140,6 +141,12 @@ namespace ExcelTrans
         /// <param name="column">The column.</param>
         /// <returns></returns>
         public static string GetAddress(int row, int column) => ExcelCellBase.GetAddress(row, column);
+        /// <summary>
+        /// Gets the address.
+        /// </summary>
+        /// <param name="cell">The cell.</param>
+        /// <returns></returns>
+        public static string GetAddress((int row, int column) cell) => ExcelCellBase.GetAddress(cell.row, cell.column);
         /// <summary>
         /// Gets the address.
         /// </summary>
@@ -192,6 +199,12 @@ namespace ExcelTrans
         /// <param name="toColumn">To column.</param>
         /// <returns></returns>
         public static string GetAddress(int fromRow, int fromColumn, int toRow, int toColumn) => ExcelCellBase.GetAddress(fromRow, fromColumn, toRow, toColumn);
+        /// <summary>
+        /// Gets the address.
+        /// </summary>
+        /// <param name="cell">The cell.</param>
+        /// <returns></returns>
+        public static string GetAddress((int fromRow, int fromColumn, int toRow, int toColumn) cell) => ExcelCellBase.GetAddress(cell.fromRow, cell.fromColumn, cell.toRow, cell.toColumn);
         /// <summary>
         /// Gets the address.
         /// </summary>
@@ -258,6 +271,13 @@ namespace ExcelTrans
         /// Gets the address.
         /// </summary>
         /// <param name="r">The r.</param>
+        /// <param name="cell">The cell.</param>
+        /// <returns></returns>
+        public static string GetAddress((Address r, int row, int col) cell) => $"^{(int)cell.r}:{cell.row}:{cell.col}";
+        /// <summary>
+        /// Gets the address.
+        /// </summary>
+        /// <param name="r">The r.</param>
         /// <param name="fromRow">From row.</param>
         /// <param name="fromColumn">From column.</param>
         /// <param name="toRow">To row.</param>
@@ -274,6 +294,12 @@ namespace ExcelTrans
         /// <param name="toColumn">To column.</param>
         /// <returns></returns>
         public static string GetAddress(Address r, int fromRow, int fromColumn, int toRow, int toColumn) => $"^{(int)r}:{fromRow}:{fromColumn}:{toRow}:{toColumn}";
+        /// <summary>
+        /// Gets the address.
+        /// </summary>
+        /// <param name="cell">The cell.</param>
+        /// <returns></returns>
+        public static string GetAddress((Address r, int fromRow, int fromColumn, int toRow, int toColumn) cell) => $"^{(int)cell.r}:{cell.fromRow}:{cell.fromColumn}:{cell.toRow}:{cell.toColumn}";
         /// <summary>
         /// Gets the address.
         /// </summary>
@@ -296,6 +322,13 @@ namespace ExcelTrans
         /// Gets the address.
         /// </summary>
         /// <param name="ctx">The CTX.</param>
+        /// <param name="cell">The cell.</param>
+        /// <returns></returns>
+        public static string GetAddress(this IExcelContext ctx, (Address r, int row, int col) cell) => DecodeAddress(ctx, GetAddress(cell));
+        /// <summary>
+        /// Gets the address.
+        /// </summary>
+        /// <param name="ctx">The CTX.</param>
         /// <param name="r">The r.</param>
         /// <param name="fromRow">From row.</param>
         /// <param name="fromColumn">From column.</param>
@@ -314,6 +347,13 @@ namespace ExcelTrans
         /// <param name="toColumn">To column.</param>
         /// <returns></returns>
         public static string GetAddress(this IExcelContext ctx, Address r, int fromRow, int fromColumn, int toRow, int toColumn) => DecodeAddress(ctx, GetAddress(r, fromRow, fromColumn, toRow, toColumn));
+        /// <summary>
+        /// Gets the address.
+        /// </summary>
+        /// <param name="ctx">The CTX.</param>
+        /// <param name="cell">The cell.</param>
+        /// <returns></returns>
+        public static string GetAddress(this IExcelContext ctx, (Address r, int fromRow, int fromColumn, int toRow, int toColumn) cell) => DecodeAddress(ctx, GetAddress(cell));
 
         /// <summary>
         /// Decodes the address.

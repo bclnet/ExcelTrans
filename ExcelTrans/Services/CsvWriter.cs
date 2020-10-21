@@ -1,4 +1,5 @@
 using System;
+using System.Buffers.Text;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -71,7 +72,7 @@ namespace ExcelTrans.Services
                             if (fields != null && fields.TryGetValue(column.Name, out var field) && field != null)
                             {
                                 if (field.Ignore) continue;
-                                value = field.CustomFieldFormatter == null ? itemValue?.ToString() ?? string.Empty : field.CustomFieldFormatter(field, item, itemValue);
+                                value = (field.CustomFieldFormatter == null ? CastValue(itemValue) : field.CustomFieldFormatter(field, item, itemValue)) ?? string.Empty;
                                 if (value.Length == 0)
                                     value = field.DefaultValue ?? string.Empty;
                                 if (value.Length != 0)
@@ -89,7 +90,7 @@ namespace ExcelTrans.Services
                                     }
                                 }
                             }
-                            else value = itemValue?.ToString() ?? string.Empty;
+                            else value = CastValue(itemValue) ?? string.Empty;
                             // append value
                             b.Append(Encode(encodeValues ? EncodeValue(value) : value) + delimiter);
                         }
@@ -102,6 +103,11 @@ namespace ExcelTrans.Services
             }
             finally { w.Flush(); }
         }
+
+        static string CastValue(object value) =>
+            value == null ? null :
+            value is byte[] valueAsBytes ? Convert.ToBase64String(valueAsBytes) :
+            value.ToString();
 
         static string Encode(string value) => value;
         static string EncodeValue(string value) => string.IsNullOrEmpty(value) ? "\"\"" : "\"" + value.Replace("\"", "\"\"") + "\"";

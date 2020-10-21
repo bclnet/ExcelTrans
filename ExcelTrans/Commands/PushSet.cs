@@ -107,7 +107,7 @@ namespace ExcelTrans.Commands
             w.WriteLine($"{new string(' ', pad)}PushSet{(TakeY <= 1 ? null : $"[{TakeY}]")}: {(Group != null ? "[group func]" : null)}");
             if (Group != null)
             {
-                var fakeCtx = new ExcelContext();
+                var fakeCtx = new ExcelContext(false);
                 var fakeSet = new[] { new Collection<string> { "Fake" } };
                 var fakeObj = fakeSet.GroupBy(y => y[0]).FirstOrDefault();
                 var cmds = Cmds(fakeCtx, fakeObj);

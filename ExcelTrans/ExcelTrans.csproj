@@ -8,11 +8,12 @@
     <Authors>bclnet</Authors>
     <PackageLicenseUrl>http://www.opensource.org/licenses/mit-license.php</PackageLicenseUrl>
     <PackageProjectUrl>https://github.com/bclnet/ExcelTrans</PackageProjectUrl>
-    <Version>1.0.2</Version>
+    <Version>1.0.3</Version>
+    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="EPPlus" Version="5.3.1" />
+    <PackageReference Include="EPPlus" Version="5.4.0" />
     <PackageReference Include="Microsoft.CSharp" Version="4.7.0" />
     <PackageReference Include="NPOI" Version="2.5.1" />
     <PackageReference Include="System.Drawing.Common" Version="4.7.0" />

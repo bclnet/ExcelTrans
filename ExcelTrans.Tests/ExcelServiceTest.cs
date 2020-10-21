@@ -16,7 +16,7 @@ namespace ExcelTrans
         public void Configure()
         {
             _simpleCmds = new IExcelCommand[] { new CellStyle("A1", "f1") };
-            _excelContext = new ExcelContext();
+            _excelContext = new ExcelContext(false);
         }
 
         [TearDown]

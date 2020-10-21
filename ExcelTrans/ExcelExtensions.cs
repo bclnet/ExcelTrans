@@ -228,6 +228,7 @@ namespace ExcelTrans
         /// <exception cref="ArgumentOutOfRangeException">moduleKind</exception>
         public static void VbaModule(this IExcelContext ctx, VbaCode code, VbaModuleKind moduleKind)
         {
+            if (ctx.MacrosDisabled) return;
             var name = VbaNameCorrection(code.Name);
             var v = ((ExcelContext)ctx).EnsureVba();
             ExcelVBAModule m;
@@ -260,6 +261,7 @@ namespace ExcelTrans
         /// <param name="libraries">The libraries.</param>
         public static void VbaReference(this IExcelContext ctx, VbaLibrary[] libraries)
         {
+            if (ctx.MacrosDisabled) return;
             var references = ((ExcelContext)ctx).EnsureVba().References;
             foreach (var library in libraries)
             {
@@ -279,6 +281,7 @@ namespace ExcelTrans
         /// <param name="ctx">The CTX.</param>
         public static void VbaSignature(this IExcelContext ctx)
         {
+            if (ctx.MacrosDisabled) return;
             var v = ((ExcelContext)ctx).EnsureVba();
             v.Signature.Certificate = null;
         }
@@ -287,10 +290,11 @@ namespace ExcelTrans
         /// Vbas the protection.
         /// </summary>
         /// <param name="ctx">The CTX.</param>
-        public static void VbaProtection(this IExcelContext ctx)
+        public static void VbaProtection(this IExcelContext ctx, string password)
         {
+            if (ctx.MacrosDisabled) return;
             var v = ((ExcelContext)ctx).EnsureVba();
-            v.Protection.SetPassword("EPPlus");
+            v.Protection.SetPassword(password);
         }
 
         #endregion
@@ -663,12 +667,26 @@ namespace ExcelTrans
         /// Cells the style.
         /// </summary>
         /// <param name="ctx">The CTX.</param>
+        /// <param name="cell">The cell.</param>
+        /// <param name="styles">The styles.</param>
+        public static void CellStyle(this IExcelContext ctx, (int row, int col) cell, params string[] styles) => CellStyle(ctx, ExcelService.GetAddress(cell), styles);
+        /// <summary>
+        /// Cells the style.
+        /// </summary>
+        /// <param name="ctx">The CTX.</param>
         /// <param name="fromRow">From row.</param>
         /// <param name="fromCol">From col.</param>
         /// <param name="toRow">To row.</param>
         /// <param name="toCol">To col.</param>
         /// <param name="styles">The styles.</param>
         public static void CellStyle(this IExcelContext ctx, int fromRow, int fromCol, int toRow, int toCol, params string[] styles) => CellStyle(ctx, ExcelService.GetAddress(fromRow, fromCol, toRow, toCol), styles);
+        /// <summary>
+        /// Cells the style.
+        /// </summary>
+        /// <param name="ctx">The CTX.</param>
+        /// <param name="cell">The cells.</param>
+        /// <param name="styles">The styles.</param>
+        public static void CellStyle(this IExcelContext ctx, (int fromRow, int fromCol, int toRow, int toCol) cell, params string[] styles) => CellStyle(ctx, ExcelService.GetAddress(cell), styles);
         /// <summary>
         /// Cells the style.
         /// </summary>
@@ -690,12 +708,27 @@ namespace ExcelTrans
         /// </summary>
         /// <param name="ctx">The CTX.</param>
         /// <param name="r">The r.</param>
+        /// <param name="cell">The cell.</param>
+        /// <param name="styles">The styles.</param>
+        public static void CellStyle(this IExcelContext ctx, (Address r, int row, int col) cell, params string[] styles) => CellStyle(ctx, ExcelService.GetAddress(cell), styles);
+        /// <summary>
+        /// Cells the style.
+        /// </summary>
+        /// <param name="ctx">The CTX.</param>
+        /// <param name="r">The r.</param>
         /// <param name="fromRow">From row.</param>
         /// <param name="fromCol">From col.</param>
         /// <param name="toRow">To row.</param>
         /// <param name="toCol">To col.</param>
         /// <param name="styles">The styles.</param>
         public static void CellStyle(this IExcelContext ctx, Address r, int fromRow, int fromCol, int toRow, int toCol, params string[] styles) => CellStyle(ctx, ExcelService.GetAddress(r, fromRow, fromCol, toRow, toCol), styles);
+        /// <summary>
+        /// Cells the style.
+        /// </summary>
+        /// <param name="ctx">The CTX.</param>
+        /// <param name="cell">The cells.</param>
+        /// <param name="styles">The styles.</param>
+        public static void CellStyle(this IExcelContext ctx, (Address r, int fromRow, int fromCol, int toRow, int toCol) cell, params string[] styles) => CellStyle(ctx, ExcelService.GetAddress(cell), styles);
         /// <summary>
         /// Cells the style.
         /// </summary>
@@ -723,12 +756,28 @@ namespace ExcelTrans
         /// </summary>
         /// <param name="ctx">The CTX.</param>
         /// <param name="validationKind">Kind of the validation.</param>
+        /// <param name="cell">The cell.</param>
+        /// <param name="rules">The rules.</param>
+        public static void CellValidation(this IExcelContext ctx, CellValidationKind validationKind, (int row, int col) cell, params string[] rules) => CellValidation(ctx, validationKind, ExcelService.GetAddress(cell), rules);
+        /// <summary>
+        /// Cells the validation.
+        /// </summary>
+        /// <param name="ctx">The CTX.</param>
+        /// <param name="validationKind">Kind of the validation.</param>
         /// <param name="fromRow">From row.</param>
         /// <param name="fromCol">From col.</param>
         /// <param name="toRow">To row.</param>
         /// <param name="toCol">To col.</param>
         /// <param name="rules">The rules.</param>
         public static void CellValidation(this IExcelContext ctx, CellValidationKind validationKind, int fromRow, int fromCol, int toRow, int toCol, params string[] rules) => CellValidation(ctx, validationKind, ExcelService.GetAddress(fromRow, fromCol, toRow, toCol), rules);
+        /// <summary>
+        /// Cells the validation.
+        /// </summary>
+        /// <param name="ctx">The CTX.</param>
+        /// <param name="validationKind">Kind of the validation.</param>
+        /// <param name="cell">The cells.</param>
+        /// <param name="rules">The rules.</param>
+        public static void CellValidation(this IExcelContext ctx, CellValidationKind validationKind, (int fromRow, int fromCol, int toRow, int toCol) cell, params string[] rules) => CellValidation(ctx, validationKind, ExcelService.GetAddress(cell), rules);
         /// <summary>
         /// Cells the validation.
         /// </summary>
@@ -747,6 +796,14 @@ namespace ExcelTrans
         /// <param name="col">The col.</param>
         /// <param name="rules">The rules.</param>
         public static void CellValidation(this IExcelContext ctx, CellValidationKind validationKind, Address r, int row, int col, params string[] rules) => CellValidation(ctx, validationKind, ExcelService.GetAddress(r, row, col), rules);
+        /// <summary>
+        /// Cells the validation.
+        /// </summary>
+        /// <param name="ctx">The CTX.</param>
+        /// <param name="validationKind">Kind of the validation.</param>
+        /// <param name="cell">The cell.</param>
+        /// <param name="rules">The rules.</param>
+        public static void CellValidation(this IExcelContext ctx, CellValidationKind validationKind, (Address r, int row, int col) cell, params string[] rules) => CellValidation(ctx, validationKind, ExcelService.GetAddress(cell), rules);
         /// <summary>
         /// Cells the validation.
         /// </summary>
@@ -802,6 +859,15 @@ namespace ExcelTrans
         /// Cells the value.
         /// </summary>
         /// <param name="ctx">The CTX.</param>
+        /// <param name="cell">The cell.</param>
+        /// <param name="value">The value.</param>
+        /// <param name="valueKind">Kind of the value.</param>
+        /// <param name="valueFormat">The value format.</param>
+        public static void CellValue(this IExcelContext ctx, (int row, int col) cell, object value, CellValueKind valueKind = CellValueKind.Value, string valueFormat = null) => ctx.CellValue(ExcelService.GetAddress(cell), value, valueKind, valueFormat);
+        /// <summary>
+        /// Cells the value.
+        /// </summary>
+        /// <param name="ctx">The CTX.</param>
         /// <param name="fromRow">From row.</param>
         /// <param name="fromCol">From col.</param>
         /// <param name="toRow">To row.</param>
@@ -810,6 +876,15 @@ namespace ExcelTrans
         /// <param name="valueKind">Kind of the value.</param>
         /// <param name="valueFormat">The value format.</param>
         public static void CellValue(this IExcelContext ctx, int fromRow, int fromCol, int toRow, int toCol, object value, CellValueKind valueKind = CellValueKind.Value, string valueFormat = null) => ctx.CellValue(ExcelService.GetAddress(fromRow, fromCol, toRow, toCol), value, valueKind, valueFormat);
+        /// <summary>
+        /// Cells the value.
+        /// </summary>
+        /// <param name="ctx">The CTX.</param>
+        /// <param name="cell">The cells.</param>
+        /// <param name="value">The value.</param>
+        /// <param name="valueKind">Kind of the value.</param>
+        /// <param name="valueFormat">The value format.</param>
+        public static void CellValue(this IExcelContext ctx, (int fromRow, int fromCol, int toRow, int toCol) cell, object value, CellValueKind valueKind = CellValueKind.Value, string valueFormat = null) => ctx.CellValue(ExcelService.GetAddress(cell), value, valueKind, valueFormat);
         /// <summary>
         /// Cells the value.
         /// </summary>
@@ -834,6 +909,15 @@ namespace ExcelTrans
         /// Cells the value.
         /// </summary>
         /// <param name="ctx">The CTX.</param>
+        /// <param name="cell">The cell.</param>
+        /// <param name="value">The value.</param>
+        /// <param name="valueKind">Kind of the value.</param>
+        /// <param name="valueFormat">The value format.</param>
+        public static void CellValue(this IExcelContext ctx, (Address r, int row, int col) cell, object value, CellValueKind valueKind = CellValueKind.Value, string valueFormat = null) => ctx.CellValue(ExcelService.GetAddress(cell), value, valueKind, valueFormat);
+        /// <summary>
+        /// Cells the value.
+        /// </summary>
+        /// <param name="ctx">The CTX.</param>
         /// <param name="r">The r.</param>
         /// <param name="fromRow">From row.</param>
         /// <param name="fromCol">From col.</param>
@@ -843,6 +927,15 @@ namespace ExcelTrans
         /// <param name="valueKind">Kind of the value.</param>
         /// <param name="valueFormat">The value format.</param>
         public static void CellValue(this IExcelContext ctx, Address r, int fromRow, int fromCol, int toRow, int toCol, object value, CellValueKind valueKind = CellValueKind.Value, string valueFormat = null) => ctx.CellValue(ExcelService.GetAddress(r, fromRow, fromCol, toRow, toCol), value, valueKind, valueFormat);
+        /// <summary>
+        /// Cells the value.
+        /// </summary>
+        /// <param name="ctx">The CTX.</param>
+        /// <param name="cell">The cells.</param>
+        /// <param name="value">The value.</param>
+        /// <param name="valueKind">Kind of the value.</param>
+        /// <param name="valueFormat">The value format.</param>
+        public static void CellValue(this IExcelContext ctx, (Address r, int fromRow, int fromCol, int toRow, int toCol) cell, object value, CellValueKind valueKind = CellValueKind.Value, string valueFormat = null) => ctx.CellValue(ExcelService.GetAddress(cell), value, valueKind, valueFormat);
         /// <summary>
         /// Cells the value.
         /// </summary>
@@ -878,6 +971,14 @@ namespace ExcelTrans
         /// Gets the cell value.
         /// </summary>
         /// <param name="ctx">The CTX.</param>
+        /// <param name="cell">The cell.</param>
+        /// <param name="valueKind">Kind of the value.</param>
+        /// <returns></returns>
+        public static object GetCellValue(this IExcelContext ctx, (int row, int col) cell, CellValueKind valueKind = CellValueKind.Value) => ctx.GetCellValue(ExcelService.GetAddress(cell.row, cell.col), valueKind);
+        /// <summary>
+        /// Gets the cell value.
+        /// </summary>
+        /// <param name="ctx">The CTX.</param>
         /// <param name="fromRow">From row.</param>
         /// <param name="fromCol">From col.</param>
         /// <param name="toRow">To row.</param>
@@ -885,6 +986,14 @@ namespace ExcelTrans
         /// <param name="valueKind">Kind of the value.</param>
         /// <returns></returns>
         public static object GetCellValue(this IExcelContext ctx, int fromRow, int fromCol, int toRow, int toCol, CellValueKind valueKind = CellValueKind.Value) => ctx.GetCellValue(ExcelService.GetAddress(fromRow, fromCol, toRow, toCol), valueKind);
+        /// <summary>
+        /// Gets the cell value.
+        /// </summary>
+        /// <param name="ctx">The CTX.</param>
+        /// <param name="cell">The cells.</param>
+        /// <param name="valueKind">Kind of the value.</param>
+        /// <returns></returns>
+        public static object GetCellValue(this IExcelContext ctx, (int fromRow, int fromCol, int toRow, int toCol) cell, CellValueKind valueKind = CellValueKind.Value) => ctx.GetCellValue(ExcelService.GetAddress(cell), valueKind);
         /// <summary>
         /// Gets the cell value.
         /// </summary>
@@ -907,6 +1016,14 @@ namespace ExcelTrans
         /// Gets the cell value.
         /// </summary>
         /// <param name="ctx">The CTX.</param>
+        /// <param name="cell">The cell.</param>
+        /// <param name="valueKind">Kind of the value.</param>
+        /// <returns></returns>
+        public static object GetCellValue(this IExcelContext ctx, (Address r, int row, int col) cell, CellValueKind valueKind = CellValueKind.Value) => ctx.GetCellValue(ExcelService.GetAddress(cell), valueKind);
+        /// <summary>
+        /// Gets the cell value.
+        /// </summary>
+        /// <param name="ctx">The CTX.</param>
         /// <param name="r">The r.</param>
         /// <param name="fromRow">From row.</param>
         /// <param name="fromCol">From col.</param>
@@ -915,6 +1032,14 @@ namespace ExcelTrans
         /// <param name="valueKind">Kind of the value.</param>
         /// <returns></returns>
         public static object GetCellValue(this IExcelContext ctx, Address r, int fromRow, int fromCol, int toRow, int toCol, CellValueKind valueKind = CellValueKind.Value) => ctx.GetCellValue(ExcelService.GetAddress(r, fromRow, fromCol, toRow, toCol), valueKind);
+        /// <summary>
+        /// Gets the cell value.
+        /// </summary>
+        /// <param name="ctx">The CTX.</param>
+        /// <param name="cell">The cells.</param>
+        /// <param name="valueKind">Kind of the value.</param>
+        /// <returns></returns>
+        public static object GetCellValue(this IExcelContext ctx, (Address r, int fromRow, int fromCol, int toRow, int toCol) cell, CellValueKind valueKind = CellValueKind.Value) => ctx.GetCellValue(ExcelService.GetAddress(cell), valueKind);
         /// <summary>
         /// Gets the cell value.
         /// </summary>

@@ -15,7 +15,32 @@ namespace ExcelTrans
     /// <seealso cref="System.IDisposable" />
     public interface IExcelContext : IDisposable
     {
+        /// <summary>
+        /// Gets a value indicating whether macros are disabled.
+        /// </summary>
+        /// <value>
+        ///   <c>true</c> if macros are disabled otherwise, <c>false</c>.
+        /// </value>
+        bool MacrosDisabled { get; }
+        /// <summary>
+        /// Gets or sets the <see cref="System.Object"/> with the specified row.
+        /// </summary>
+        /// <value>
+        /// The <see cref="System.Object"/>.
+        /// </value>
+        /// <param name="row">The row.</param>
+        /// <param name="col">The col.</param>
+        /// <returns></returns>
         object this[int row, int col] { get; set; }
+        /// <summary>
+        /// Gets or sets the <see cref="System.Object"/> with the specified cell.
+        /// </summary>
+        /// <value>
+        /// The <see cref="System.Object"/>.
+        /// </value>
+        /// <param name="cell">The cell.</param>
+        /// <returns></returns>
+        object this[(int row, int col) cell] { get; set; }
         /// <summary>
         /// Gets or sets where the cursor X starts per row.
         /// </summary>
@@ -134,6 +159,14 @@ namespace ExcelTrans
         /// <returns></returns>
         T Get<T>(int row, int col, T defaultValue = default);
         /// <summary>
+        /// Gets the specified row.
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="cell">The cell.</param>
+        /// <param name="defaultValue">The default value.</param>
+        /// <returns></returns>
+        T Get<T>((int row, int col) cell, T defaultValue = default);
+        /// <summary>
         /// Advances the cursor based on NextDirection.
         /// </summary>
         /// <param name="range">The range.</param>
@@ -156,8 +189,9 @@ namespace ExcelTrans
 
     internal class ExcelContext : IExcelContext
     {
-        public ExcelContext()
+        public ExcelContext(bool macrosDisabled = false)
         {
+            MacrosDisabled = macrosDisabled;
             P = new ExcelPackage();
             WB = P.Workbook;
         }
@@ -168,7 +202,13 @@ namespace ExcelTrans
             get => this.GetCellValue(row, col);
             set => this.CellValue(row, col, value);
         }
+        public object this[(int row, int col) cell]
+        {
+            get => this.GetCellValue(cell);
+            set => this.CellValue(cell, value);
+        }
 
+        public bool MacrosDisabled { get; }
         public int XStart { get; set; } = 1;
         public int X { get; set; } = 1;
         public int Y { get; set; } = 1;
@@ -187,12 +227,20 @@ namespace ExcelTrans
         public ExcelWorksheet WS;
         public ExcelVbaProject V;
 
-        public ExcelVbaProject EnsureVba() { if (V != null) return V; WB.CreateVBAProject(); V = WB.VbaProject; return V; }
+        public ExcelVbaProject EnsureVba()
+        {
+            if (V != null) return V;
+            if (MacrosDisabled) throw new InvalidOperationException("Macros are disabled");
+            WB.CreateVBAProject();
+            V = WB.VbaProject;
+            return V;
+        }
 
         public ExcelWorksheet EnsureWorksheet() => WS ?? (WS = WB.Worksheets.Add($"Sheet {WB.Worksheets.Count + 1}"));
 
         public ExcelRangeBase Get(string cells) => WS.Cells[this.DecodeAddress(cells)];
         public T Get<T>(int row, int col, T defaultValue = default) => this.GetCellValue(row, col) is T value ? value : defaultValue;
+        public T Get<T>((int row, int col) cell, T defaultValue = default) => this.GetCellValue(cell) is T value ? value : defaultValue;
 
         public ExcelRangeBase Next(ExcelRangeBase range, NextDirection? nextDirection = null) => (nextDirection ?? NextDirection) == NextDirection.Column ? range.Offset(0, DeltaX) : range.Offset(DeltaY, 0);
         public ExcelColumn Next(ExcelColumn col) => throw new NotImplementedException();
