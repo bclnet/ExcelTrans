@@ -30,7 +30,7 @@ namespace ExcelTrans.Commands
         /// <value>
         /// The value.
         /// </value>
-        public string Value { get; private set; }
+        public string Json { get; private set; }
         /// <summary>
         /// Gets the kind of the formatting.
         /// </summary>
@@ -126,7 +126,7 @@ namespace ExcelTrans.Commands
         {
             When = When.Normal;
             Address = address ?? throw new ArgumentNullException(nameof(address));
-            Value = value != null ? value is string @string ? @string : JsonSerializer.Serialize(value) : null;
+            Json = value != null ? value is string @string ? @string : JsonSerializer.Serialize(value) : null;
             FormattingKind = formattingKind;
             Priority = priority;
             StopIfTrue = stopIfTrue;
@@ -135,7 +135,7 @@ namespace ExcelTrans.Commands
         void IExcelCommand.Read(BinaryReader r)
         {
             Address = r.ReadString();
-            Value = r.ReadBoolean() ? r.ReadString() : null;
+            Json = r.ReadBoolean() ? r.ReadString() : null;
             FormattingKind = (ConditionalFormattingKind)r.ReadInt32();
             Priority = r.ReadBoolean() ? (int?)r.ReadInt32() : null;
             StopIfTrue = r.ReadBoolean();
@@ -144,14 +144,14 @@ namespace ExcelTrans.Commands
         void IExcelCommand.Write(BinaryWriter w)
         {
             w.Write(Address);
-            w.Write(Value != null); if (Value != null) w.Write(Value);
+            w.Write(Json != null); if (Json != null) w.Write(Json);
             w.Write((int)FormattingKind);
             w.Write(Priority != null); if (Priority != null) w.Write(Priority.Value);
             w.Write(StopIfTrue);
         }
 
-        void IExcelCommand.Execute(IExcelContext ctx, ref Action after) => ctx.ConditionalFormatting(Address, Value, FormattingKind, Priority, StopIfTrue);
+        void IExcelCommand.Execute(IExcelContext ctx, ref Action after) => ctx.ConditionalFormatting(Address, Json, FormattingKind, Priority, StopIfTrue);
 
-        void IExcelCommand.Describe(StringWriter w, int pad) { w.WriteLine($"{new string(' ', pad)}ConditionalFormatting[{Address}]: {Value} - {FormattingKind}"); }
+        void IExcelCommand.Describe(StringWriter w, int pad) { w.WriteLine($"{new string(' ', pad)}ConditionalFormatting[{Address}]: {Json} - {FormattingKind}"); }
     }
 }

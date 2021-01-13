@@ -493,13 +493,13 @@ namespace ExcelTrans
         /// <param name="ctx">The CTX.</param>
         /// <param name="address">The address.</param>
         /// <param name="name">The name.</param>
-        /// <param name="value">The value.</param>
+        /// <param name="json">The json.</param>
         /// <param name="drawingKind">Kind of the drawing.</param>
         /// <exception cref="ArgumentOutOfRangeException">drawingKind</exception>
-        public static void Drawing(this IExcelContext ctx, string address, string name, object value, DrawingKind drawingKind)
+        public static void Drawing(this IExcelContext ctx, string address, string name, object json, DrawingKind drawingKind)
         {
             // drawings
-            var token = JsonDocument.Parse(value is string @string ? @string : JsonSerializer.Serialize(value)).RootElement;
+            var token = JsonDocument.Parse(json is string @string ? @string : JsonSerializer.Serialize(json)).RootElement;
             var drawings = ((ExcelContext)ctx).WS.Drawings;
             var drawing = ApplyDrawing(name, token, drawings, drawingKind);
 
@@ -576,11 +576,11 @@ namespace ExcelTrans
         /// <param name="ctx">The CTX.</param>
         /// <param name="row">The row.</param>
         /// <param name="col">The col.</param>
-        /// <param name="value">The value.</param>
+        /// <param name="json">The json.</param>
         /// <param name="formattingKind">Kind of the formatting.</param>
         /// <param name="priority">The priority.</param>
         /// <param name="stopIfTrue">if set to <c>true</c> [stop if true].</param>
-        public static void ConditionalFormatting(this IExcelContext ctx, int row, int col, object value, ConditionalFormattingKind formattingKind, int? priority, bool stopIfTrue) => ConditionalFormatting(ctx, ExcelService.GetAddress(row, col), value, formattingKind, priority, stopIfTrue);
+        public static void ConditionalFormatting(this IExcelContext ctx, int row, int col, object json, ConditionalFormattingKind formattingKind, int? priority, bool stopIfTrue) => ConditionalFormatting(ctx, ExcelService.GetAddress(row, col), json, formattingKind, priority, stopIfTrue);
         /// <summary>
         /// Conditionals the formatting.
         /// </summary>
@@ -589,21 +589,21 @@ namespace ExcelTrans
         /// <param name="fromCol">From col.</param>
         /// <param name="toRow">To row.</param>
         /// <param name="toCol">To col.</param>
-        /// <param name="value">The value.</param>
+        /// <param name="json">The json.</param>
         /// <param name="formattingKind">Kind of the formatting.</param>
         /// <param name="priority">The priority.</param>
         /// <param name="stopIfTrue">if set to <c>true</c> [stop if true].</param>
-        public static void ConditionalFormatting(this IExcelContext ctx, int fromRow, int fromCol, int toRow, int toCol, object value, ConditionalFormattingKind formattingKind, int? priority, bool stopIfTrue) => ConditionalFormatting(ctx, ExcelService.GetAddress(fromRow, fromCol, toRow, toCol), value, formattingKind, priority, stopIfTrue);
+        public static void ConditionalFormatting(this IExcelContext ctx, int fromRow, int fromCol, int toRow, int toCol, object json, ConditionalFormattingKind formattingKind, int? priority, bool stopIfTrue) => ConditionalFormatting(ctx, ExcelService.GetAddress(fromRow, fromCol, toRow, toCol), json, formattingKind, priority, stopIfTrue);
         /// <summary>
         /// Conditionals the formatting.
         /// </summary>
         /// <param name="ctx">The CTX.</param>
         /// <param name="r">The r.</param>
-        /// <param name="value">The value.</param>
+        /// <param name="json">The json.</param>
         /// <param name="formattingKind">Kind of the formatting.</param>
         /// <param name="priority">The priority.</param>
         /// <param name="stopIfTrue">if set to <c>true</c> [stop if true].</param>
-        public static void ConditionalFormatting(this IExcelContext ctx, Address r, object value, ConditionalFormattingKind formattingKind, int? priority, bool stopIfTrue) => ConditionalFormatting(ctx, ExcelService.GetAddress(r, 0, 0), value, formattingKind, priority, stopIfTrue);
+        public static void ConditionalFormatting(this IExcelContext ctx, Address r, object json, ConditionalFormattingKind formattingKind, int? priority, bool stopIfTrue) => ConditionalFormatting(ctx, ExcelService.GetAddress(r, 0, 0), json, formattingKind, priority, stopIfTrue);
         /// <summary>
         /// Conditionals the formatting.
         /// </summary>
@@ -611,11 +611,11 @@ namespace ExcelTrans
         /// <param name="r">The r.</param>
         /// <param name="row">The row.</param>
         /// <param name="col">The col.</param>
-        /// <param name="value">The value.</param>
+        /// <param name="json">The json.</param>
         /// <param name="formattingKind">Kind of the formatting.</param>
         /// <param name="priority">The priority.</param>
         /// <param name="stopIfTrue">if set to <c>true</c> [stop if true].</param>
-        public static void ConditionalFormatting(this IExcelContext ctx, Address r, int row, int col, object value, ConditionalFormattingKind formattingKind, int? priority, bool stopIfTrue) => ConditionalFormatting(ctx, ExcelService.GetAddress(r, row, col), value, formattingKind, priority, stopIfTrue);
+        public static void ConditionalFormatting(this IExcelContext ctx, Address r, int row, int col, object json, ConditionalFormattingKind formattingKind, int? priority, bool stopIfTrue) => ConditionalFormatting(ctx, ExcelService.GetAddress(r, row, col), json, formattingKind, priority, stopIfTrue);
         /// <summary>
         /// Conditionals the formatting.
         /// </summary>
@@ -625,27 +625,27 @@ namespace ExcelTrans
         /// <param name="fromCol">From col.</param>
         /// <param name="toRow">To row.</param>
         /// <param name="toCol">To col.</param>
-        /// <param name="value">The value.</param>
+        /// <param name="json">The json.</param>
         /// <param name="formattingKind">Kind of the formatting.</param>
         /// <param name="priority">The priority.</param>
         /// <param name="stopIfTrue">if set to <c>true</c> [stop if true].</param>
-        public static void ConditionalFormatting(this IExcelContext ctx, Address r, int fromRow, int fromCol, int toRow, int toCol, object value, ConditionalFormattingKind formattingKind, int? priority, bool stopIfTrue) => ConditionalFormatting(ctx, ExcelService.GetAddress(r, fromRow, fromCol, toRow, toCol), value, formattingKind, priority, stopIfTrue);
+        public static void ConditionalFormatting(this IExcelContext ctx, Address r, int fromRow, int fromCol, int toRow, int toCol, object json, ConditionalFormattingKind formattingKind, int? priority, bool stopIfTrue) => ConditionalFormatting(ctx, ExcelService.GetAddress(r, fromRow, fromCol, toRow, toCol), json, formattingKind, priority, stopIfTrue);
         /// <summary>
         /// Conditionals the formatting.
         /// </summary>
         /// <param name="ctx">The CTX.</param>
         /// <param name="address">The address.</param>
-        /// <param name="value">The value.</param>
+        /// <param name="json">The json.</param>
         /// <param name="formattingKind">Kind of the formatting.</param>
         /// <param name="priority">The priority.</param>
         /// <param name="stopIfTrue">if set to <c>true</c> [stop if true].</param>
         /// <exception cref="ArgumentNullException">value</exception>
         /// <exception cref="ArgumentOutOfRangeException">formattingKind</exception>
-        public static void ConditionalFormatting(this IExcelContext ctx, string address, object value, ConditionalFormattingKind formattingKind, int? priority, bool stopIfTrue)
+        public static void ConditionalFormatting(this IExcelContext ctx, string address, object json, ConditionalFormattingKind formattingKind, int? priority, bool stopIfTrue)
         {
-            if (value == null)
-                throw new ArgumentNullException(nameof(value));
-            var token = JsonDocument.Parse(value is string @string ? @string : JsonSerializer.Serialize(value)).RootElement;
+            if (json == null)
+                throw new ArgumentNullException(nameof(json));
+            var token = JsonDocument.Parse(json is string @string ? @string : JsonSerializer.Serialize(json)).RootElement;
             var formatting = ((ExcelContext)ctx).WS.ConditionalFormatting;
             var ruleAddress = new ExcelAddress(ctx.DecodeAddress(address));
             ApplyConditionalFormatting(token, formatting, formattingKind, ruleAddress, priority, stopIfTrue);
@@ -1336,10 +1336,16 @@ namespace ExcelTrans
         static T ToStaticEnum<T>(string name, T defaultValue = default) =>
             string.IsNullOrEmpty(name) ? defaultValue :
             (T)typeof(T).GetProperty(name, BindingFlags.Public | BindingFlags.Static)?.GetValue(null);
+        
         static Color ParseColor(string name, Color defaultValue = default) =>
             string.IsNullOrEmpty(name) ? defaultValue :
+            char.IsDigit(name[0]) ? ParseColorIndex(int.Parse(name)) :
             name.StartsWith("#") ? ColorTranslator.FromHtml(name) :
-            ToStaticEnum<Color>(name);
+            ToStaticEnum<Color>(name, defaultValue);
+
+        static Color ParseColorIndex(int color) => color < 0 || color >= ExcelService.ExcelColorLookup.Length
+            ? throw new ArgumentOutOfRangeException(nameof(color))
+            : ExcelService.ExcelColorLookup[color];
 
         static T ToEnum<T>(JsonElement name, T defaultValue = default) where T : struct
             => name.ValueKind == JsonValueKind.String && name.GetString() is string z0 && !string.IsNullOrEmpty(z0) ? (T)Enum.Parse(typeof(T), z0)
@@ -2108,9 +2114,9 @@ namespace ExcelTrans
                 //if (style.StartsWith("f:")) excelDxfStyle.Font.Name = style.Substring(2);
                 //else if (style.StartsWith("fx")) excelDxfStyle.Font.Size = float.Parse(style.Substring(2));
                 //else if (style.StartsWith("ff")) excelDxfStyle.Font.Family = int.Parse(style.Substring(2));
-                //else if (style.StartsWith("fc")) excelDxfStyle.Font.Color = ToDxfColor(style.Substring(2));
+                if (style.StartsWith("fc")) excelDxfStyle.Font.Color.Color = ParseColor(style.Substring(2));
                 //else if (style.StartsWith("fs")) excelDxfStyle.Font.Scheme = style.Substring(2);
-                if (style == "fB") excelDxfStyle.Font.Bold = true;
+                else if (style == "fB") excelDxfStyle.Font.Bold = true;
                 else if (style == "fb") excelDxfStyle.Font.Bold = false;
                 else if (style == "fI") excelDxfStyle.Font.Italic = true;
                 else if (style == "fi") excelDxfStyle.Font.Italic = false;

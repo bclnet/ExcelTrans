@@ -88,8 +88,8 @@ Command     | Executes `.Action()`
 CommandCol  | Executes `.Func()` per Column
 CommandRow  | Executes `.Func()` per Row
 CommandValue | Executes `.Func()` per Value
-ConditionalFormatting | Applies json `.Value` of `.FormattingKind` to `.Address` in range | [ConditionalFormattingKind](#conditionalformattingkind) [Conditionals](#conditional)
-Drawing     | Applies json `.Value` of `.DrawingKind` with `.Name` to `.Address` in range | [DrawingKind](#drawingkind) [Drawings](#drawings)
+ConditionalFormatting | Applies json `.Json` of `.FormattingKind` to `.Address` in range | [ConditionalFormattingKind](#conditionalformattingkind) [Conditionals](#conditional)
+Drawing     | Applies json `.Json` of `.DrawingKind` with `.Name` to `.Address` in range | [DrawingKind](#drawingkind) [Drawings](#drawings)
 Flush       | Flushes all pending commands
 PopFrame    | Pops a Frame off the context stack
 PopSet      | Pops a Set off the context stack
@@ -341,6 +341,10 @@ Formats for parsing string values.
 ## Conditionals
 *Values for the ConditionalFormatting command*
 
+Json Examples:
+```json
+{"formula": "0", "styles": ["lc34", "fc49"]}
+```
 
 ## Drawing
 *Values for the Drawing command*

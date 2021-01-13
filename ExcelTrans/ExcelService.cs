@@ -4,6 +4,7 @@ using ExcelTrans.Utils;
 using OfficeOpenXml;
 using System;
 using System.Collections.Generic;
+using System.Drawing;
 using System.IO;
 using System.Linq;
 
@@ -504,6 +505,78 @@ namespace ExcelTrans
         //    for (var row = value.Start.Row; row <= value.End.Row; row++) pixelHeight += ws.Row(row).Height;
         //    return ((int)pixelWidth, (int)pixelHeight);
         //}
+
+        #endregion
+
+        #region Lookup
+
+        // reference extracted from ECMA-376, Part 4, Section 3.8.26 or 18.8.27 SE Part 1
+        internal readonly static Color[] ExcelColorLookup = new[] {
+            ColorTranslator.FromHtml("#000000"), // 0
+            ColorTranslator.FromHtml("#FFFFFF"),
+            ColorTranslator.FromHtml("#FF0000"),
+            ColorTranslator.FromHtml("#00FF00"),
+            ColorTranslator.FromHtml("#0000FF"),
+            ColorTranslator.FromHtml("#FFFF00"),
+            ColorTranslator.FromHtml("#FF00FF"),
+            ColorTranslator.FromHtml("#00FFFF"),
+            ColorTranslator.FromHtml("#000000"), // 8
+            ColorTranslator.FromHtml("#FFFFFF"),
+            ColorTranslator.FromHtml("#FF0000"),
+            ColorTranslator.FromHtml("#00FF00"),
+            ColorTranslator.FromHtml("#0000FF"),
+            ColorTranslator.FromHtml("#FFFF00"),
+            ColorTranslator.FromHtml("#FF00FF"),
+            ColorTranslator.FromHtml("#00FFFF"),
+            ColorTranslator.FromHtml("#800000"),
+            ColorTranslator.FromHtml("#008000"),
+            ColorTranslator.FromHtml("#000080"),
+            ColorTranslator.FromHtml("#808000"),
+            ColorTranslator.FromHtml("#800080"),
+            ColorTranslator.FromHtml("#008080"),
+            ColorTranslator.FromHtml("#C0C0C0"),
+            ColorTranslator.FromHtml("#808080"),
+            ColorTranslator.FromHtml("#9999FF"),
+            ColorTranslator.FromHtml("#993366"),
+            ColorTranslator.FromHtml("#FFFFCC"),
+            ColorTranslator.FromHtml("#CCFFFF"),
+            ColorTranslator.FromHtml("#660066"),
+            ColorTranslator.FromHtml("#FF8080"),
+            ColorTranslator.FromHtml("#0066CC"),
+            ColorTranslator.FromHtml("#CCCCFF"),
+            ColorTranslator.FromHtml("#000080"),
+            ColorTranslator.FromHtml("#FF00FF"),
+            ColorTranslator.FromHtml("#FFFF00"),
+            ColorTranslator.FromHtml("#00FFFF"),
+            ColorTranslator.FromHtml("#800080"),
+            ColorTranslator.FromHtml("#800000"),
+            ColorTranslator.FromHtml("#008080"),
+            ColorTranslator.FromHtml("#0000FF"),
+            ColorTranslator.FromHtml("#00CCFF"),
+            ColorTranslator.FromHtml("#CCFFFF"),
+            ColorTranslator.FromHtml("#CCFFCC"),
+            ColorTranslator.FromHtml("#FFFF99"),
+            ColorTranslator.FromHtml("#99CCFF"),
+            ColorTranslator.FromHtml("#FF99CC"),
+            ColorTranslator.FromHtml("#CC99FF"),
+            ColorTranslator.FromHtml("#FFCC99"),
+            ColorTranslator.FromHtml("#3366FF"),
+            ColorTranslator.FromHtml("#33CCCC"),
+            ColorTranslator.FromHtml("#99CC00"),
+            ColorTranslator.FromHtml("#FFCC00"),
+            ColorTranslator.FromHtml("#FF9900"),
+            ColorTranslator.FromHtml("#FF6600"),
+            ColorTranslator.FromHtml("#666699"),
+            ColorTranslator.FromHtml("#969696"),
+            ColorTranslator.FromHtml("#003366"),
+            ColorTranslator.FromHtml("#339966"),
+            ColorTranslator.FromHtml("#003300"),
+            ColorTranslator.FromHtml("#333300"),
+            ColorTranslator.FromHtml("#993300"),
+            ColorTranslator.FromHtml("#993366"),
+            ColorTranslator.FromHtml("#333399"),
+            ColorTranslator.FromHtml("#333333"), // 63
+        };
 
         #endregion
     }
